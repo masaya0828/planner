@@ -296,7 +296,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const NOTEI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='14';
+const APP_VERSION='16';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -321,7 +321,7 @@ function norm(o){const b=blank();if(!o||typeof o!=='object')return b;
   if(Array.isArray(o.ygoals))b.ygoals=o.ygoals.filter(g=>g&&g.t&&Number.isInteger(+g.y)).map(g=>({id:id(g.id),y:+g.y,t:String(g.t),cat:ck.has(g.cat)?g.cat:'etc',done:!!g.done,memo:String(g.memo||'')}));
   if(Array.isArray(o.wish))b.wish=o.wish.filter(w=>w&&w.t).map(w=>({id:id(w.id),t:String(w.t),cat:ck.has(w.cat)?w.cat:'etc',done:!!w.done,doneAt:isDay(w.doneAt)?w.doneAt:'',memo:String(w.memo||'')}));
   if(Array.isArray(o.jots))b.jots=o.jots.filter(j=>j&&j.t).map(j=>({id:id(j.id),at:String(j.at||''),t:String(j.t),pin:!!j.pin}));
-  if(Array.isArray(o.events))b.events=o.events.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,t:String(e.t),memo:String(e.memo||'')}));
+  if(Array.isArray(o.events))b.events=o.events.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,end:isDay(e.end)&&e.end>e.date?e.end:'',t:String(e.t),memo:String(e.memo||'')}));
   if(Array.isArray(o.dls))b.dls=o.dls.filter(d=>d&&d.t&&isDay(d.date)).map(d=>({id:id(d.id),t:String(d.t),date:d.date}));
   ['notes','dnotes'].forEach(f=>{if(o[f]&&typeof o[f]==='object')Object.keys(o[f]).forEach(k=>{if(isDay(k)&&o[f][k])b[f][k]=String(o[f][k])})});
   return b}
@@ -557,6 +557,14 @@ function renderToday(){
   setTimeout(maybeCal,0);
   return `<div class="cols c-today"><div class="col col-a">${a}</div><div class="col col-b">${h}</div></div>`;
 }
+function weekDls(){
+  const from=wkSel,to=addDays(wkSel,21),t=todayKey();
+  const ds=S.dls.filter(d=>d.date>=from&&d.date<to).sort((a,b)=>a.date.localeCompare(b.date));
+  const rows=ds.map(d=>{const n=dayDiff(t,d.date),lbl=n<0?'終了':n===0?'今日':`あと${n}日`;
+    return `<li class="${n<0?'past':''}"><span class="dl-date">${md(d.date)}<small>（${wdOf(d.date)}）</small></span><button class="tbody" data-act="dledit" data-id="${d.id}"><span class="ttext">${esc(d.t)}</span></button><span class="left ${n>=0&&n<=7?'soon':''}">${lbl}</span></li>`}).join('');
+  return `<section><h2>締め切り<span class="cnt">${ds.length||''}</span><span class="note" style="font-weight:400">今週から3週間</span><span class="sp"></span><button class="linkbtn" data-act="adddl">＋ 追加</button></h2>
+    ${rows?`<ul class="list">${rows}</ul>`:'<div class="mini-empty">この3週間の締め切りはありません。</div>'}</section>`;
+}
 function renderWeek(){
   const days=weekDays(wkSel);const t=todayKey();
   setHead(`第${isoWeek(wkSel)}週${days.includes(t)?' · 今週':''}`,`${md(days[0])}（月）– ${md(days[6])}（日）`,
@@ -568,7 +576,7 @@ function renderWeek(){
     h+=`<div class="day"><div class="dayhd ${k===t?'today':''}"><b>${wdOf(k)}</b><span class="d">${md(k)}</span><span class="sp"></span><button class="add" data-act="addtask" data-date="${k}" aria-label="${md(k)}にタスクを追加">＋</button></div>${it.length?list(it):'<div class="mini-empty">予定なし</div>'}</div>`});
   h+=`</div></section>`;
   const sb=sampleBox();
-  return `<div class="cols c-week"><div class="col col-a">${h}</div><div class="col col-b">${un}${renderReview()}${sb?`<div class="o4">${sb}</div>`:''}</div></div>`;
+  return `<div class="cols c-week"><div class="col col-a">${h}</div><div class="col col-b">${weekDls()}${un}${renderReview()}${sb?`<div class="o4">${sb}</div>`:''}</div></div>`;
 }
 function renderReview(){
   const undone=tasksOfWeek(wkSel).filter(x=>!x.done);
@@ -590,6 +598,14 @@ function renderMonth(){
   else h+=`<div class="empty">月の初めに、今月終わらせたいことを3〜5個書いておきましょう。週の予定はここから選びます。</div>`;
   h+=`</section>`;
   const ga=h;h='';
+  const mStart=moSel+'-01',mEnd=moAdd(moSel,1)+'-01',tk=todayKey();
+  const mev=S.events.filter(e=>e.date<mEnd&&(e.end||e.date)>=mStart).sort((a,b)=>a.date.localeCompare(b.date)||a.t.localeCompare(b.t));
+  h+=`<section><h2>イベント<span class="cnt">${mev.length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addmev">＋ 追加</button></h2>`;
+  if(mev.length){h+=`<ul class="list">`+mev.map(e=>{const last=e.end||e.date,n=dayDiff(tk,e.date),
+      lbl=last<tk?'終了':e.date<=tk?(e.end?'開催中':'今日'):`あと${n}日`;
+    return `<li class="${last<tk?'past':''}"><span class="dl-date">${md(e.date)}<small>（${wdOf(e.date)}）${e.end?`<br>〜${md(e.end)}（${wdOf(e.end)}）`:''}</small></span><button class="tbody" data-act="evedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button><span class="left ${last>=tk&&n<=7?'soon':''}">${lbl}</span></li>`}).join('')+`</ul>`}
+  else h+=`<div class="mini-empty">学会、発表、旅行など、この月の予定を入れておけます。入れた予定は「今日」の画面の「この日の予定」にも出ます。</div>`;
+  h+=`</section>`;
   const dls=S.dls.filter(d=>d.date&&d.date.slice(0,7)===moSel).sort((a,b)=>a.date.localeCompare(b.date));
   h+=`<section><h2>締め切り<span class="cnt">${dls.length}</span><span class="sp"></span><button class="linkbtn" data-act="adddl">＋ 追加</button></h2>`;
   if(dls.length){h+=`<ul class="list">`+dls.map(d=>{const n=dayDiff(t,d.date);const lbl=n<0?'終了':n===0?'今日':`あと${n}日`;
@@ -666,7 +682,7 @@ function readSheet(){if(!sh)return;const v=id=>{const e=document.getElementById(
   if(v('f-text')!==undefined)sh.t=v('f-text');
   if(['task','goal','ev','yg','wish'].includes(sh.mode)){const mv=v('f-memo');if(mv!==undefined)sh.memo=mv}
   if(sh.mode==='jot'){const jv=v('f-jtext');if(jv!==undefined)sh.t=jv}
-  if(sh.mode==='ev'){const dv=v('f-evdate');if(dv!==undefined)sh.date=dv}
+  if(sh.mode==='ev'){const dv=v('f-evdate');if(dv!==undefined)sh.date=dv;const de=v('f-evend');if(de!==undefined)sh.end=de||''}
   if(sh.mode==='task'){const dv=v('f-date');if(dv!==undefined)sh.date=dv||null;const gv=v('f-goal');if(gv!==undefined)sh.goal=gv||null}
   if(sh.mode==='dl'){const dd=v('f-dldate');if(dd!==undefined)sh.date=dd}
   if(sh.mode==='block'){const a=v('f-bs'),b=v('f-be');if(a!==undefined)sh.s=toMin(a);if(b!==undefined)sh.e=toMin(b)}}
@@ -686,9 +702,9 @@ function catSection(){
 function openCat(k){const c=k?cats().find(x=>x.k===k):null;const used=new Set(cats().map(x=>x.c));
   sh=c?{mode:'cat',id:c.k,t:c.n,c:c.c}:{mode:'cat',id:null,t:'',c:[0,1,2,3,5,6,7,4].find(i=>!used.has(i))??0};renderSheet()}
 function evSection(){
-  const own=S.events.filter(e=>e.date===sel),cal=calFor(sel).slice().sort((a,b)=>(b.allDay-a.allDay)||String(a.s).localeCompare(String(b.s)));
+  const own=S.events.filter(e=>e.date<=sel&&sel<=(e.end||e.date)),cal=calFor(sel).slice().sort((a,b)=>(b.allDay-a.allDay)||String(a.s).localeCompare(String(b.s)));
   const rows=cal.filter(e=>e.allDay).map(e=>`<li><span class="evtag">終日</span><span class="evtitle">${esc(e.t)}</span><span class="evsrc">カレンダー</span></li>`).join('')
-    +own.map(e=>`<li><span class="evtag">終日</span><button class="tbody" data-act="evedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button></li>`).join('');
+    +own.map(e=>`<li><span class="evtag">終日</span><button class="tbody" data-act="evedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.end?`<span class="meta">${md(e.date)}（${wdOf(e.date)}）〜${md(e.end)}（${wdOf(e.end)}）</span>`:''}${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button></li>`).join('');
 
   return `<section id="evbox"><h2>この日の予定<span class="cnt">${own.length+cal.filter(e=>e.allDay).length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addev">＋ 追加</button></h2>
     ${rows?`<ul class="list evlist">${rows}</ul>`:'<div class="mini-empty">予定はありません。学会、締め切り日、外出など、その日全体に関わることを入れておけます。</div>'}${calNote()}</section>`;
@@ -790,9 +806,10 @@ function renderSheet(){
     body=`<h3>メモを編集</h3><p class="note" style="margin:0">${esc(sh.at||'')}</p>
     <div class="field"><label for="f-jtext">内容</label><textarea id="f-jtext" style="min-height:140px">${esc(sh.t||'')}</textarea></div>`;
   }else if(sh.mode==='ev'){
-    body=`<h3>${editing?'予定を編集':'予定を追加'}</h3>
+    body=`<h3>${view==='month'?(editing?'イベントを編集':'イベントを追加'):(editing?'予定を編集':'予定を追加')}</h3>
     <div class="field"><label for="f-text">内容</label><input type="text" id="f-text" value="${esc(sh.t)}" placeholder="例：学会（大阪）" enterkeyhint="done"></div>
-    <div class="field"><label for="f-evdate">日付</label><input type="date" id="f-evdate" value="${esc(sh.date||'')}"></div>
+    <div class="timerow"><div class="field"><label for="f-evdate">日付</label><input type="date" id="f-evdate" value="${esc(sh.date||'')}"></div>
+      <div class="field"><label for="f-evend">終了日（複数日のとき）</label><input type="date" id="f-evend" value="${esc(sh.end||'')}"></div></div>
     <div class="field"><label for="f-memo">メモ（備考）</label><textarea id="f-memo" style="min-height:70px" placeholder="場所、持ち物など">${esc(sh.memo||'')}</textarea></div>`;
   }else if(sh.mode==='cat'){
     const n=sh.id?S.tasks.filter(t=>t.cat===sh.id).length+S.goals.filter(g=>g.cat===sh.id).length:0;
@@ -826,7 +843,8 @@ function saveSheet(){readSheet();const text=(sh.t||'').trim();
     const i=arr.findIndex(x=>x.id===o.id);i>=0?arr[i]=o:arr.push(o);sh=null;renderSheet();persist();return}
   if(sh.mode==='jot'){if(!text){sheetErr('内容を入力してください。');return}const j=S.jots.find(x=>x.id===sh.id);if(j)j.t=text;sh=null;renderSheet();persist();return}
   if(sh.mode==='ev'){if(!text){sheetErr('内容を入力してください。');return}if(!isDayK(sh.date)){sheetErr('日付を入力してください。');return}
-    const o={id:sh.id||uid(),date:sh.date,t:text,memo:(sh.memo||'').trim()},i=S.events.findIndex(x=>x.id===o.id);i>=0?S.events[i]=o:S.events.push(o);
+    if(sh.end&&!isDayK(sh.end))sh.end='';if(sh.end&&sh.end<sh.date){sheetErr('終了日は開始日と同じか、それより後にしてください。');return}
+    const o={id:sh.id||uid(),date:sh.date,end:sh.end&&sh.end>sh.date?sh.end:'',t:text,memo:(sh.memo||'').trim()},i=S.events.findIndex(x=>x.id===o.id);i>=0?S.events[i]=o:S.events.push(o);
     sh=null;renderSheet();persist();return}
   if(sh.mode==='cat'){if(!text){sheetErr('名前を入力してください。');return}
     const cs=cats().map(c=>({...c}));if(cs.some(c=>c.n===text&&c.k!==sh.id)){sheetErr('同じ名前のカテゴリがあります。');return}
@@ -918,6 +936,7 @@ document.addEventListener('click',e=>{
     case 'jpin':{const j=S.jots.find(x=>x.id===id);if(j){j.pin=!j.pin;persist()}break}
     case 'jot-add':{const ta=document.getElementById('f-jot'),v=(ta.value||'').trim();if(!v){ta.focus();break}S.jots.push({id:uid(),at:nowStamp(),t:v,pin:false});jq='';jotDraft='';persist();break}
     case 'tlfold':tlOpen=!tlOpen;try{localStorage.setItem('planner-tl-open',tlOpen?'1':'0')}catch(_){}drawTl();break;
+    case 'addmev':openEv(null);if(sh){const t=todayKey();sh.date=moSel===t.slice(0,7)?t:moSel+'-01';renderSheet()}break;
     case 'addev':openEv(null);break;
     case 'evedit':openEv(S.events.find(x=>x.id===id));break;
     case 'addcat':openCat(null);break;
@@ -937,7 +956,7 @@ document.addEventListener('click',e=>{
     case 'dledit':openDl(S.dls.find(x=>x.id===id));break;
     case 'addtask':openTask(null,{date:el.dataset.date||null,wk:wkSel});break;
     case 'addgoal':openGoal(null);break;
-    case 'adddl':openDl(null);break;
+    case 'adddl':openDl(null);if(view==='week'&&sh){const t=todayKey();sh.date=t>=wkSel&&t<addDays(wkSel,7)?t:wkSel;renderSheet()}break;
     case 'fab':if(view==='today')openTask(null,{date:sel,wk:monday(sel)});else if(view==='week')openTask(null,{date:null,wk:wkSel});else if(view==='notes'){const ta=document.getElementById('f-jot');if(ta)ta.focus()}else openGoal(null);break;
     case 'carry':confirmCarry=true;render();break;
     case 'carry-no':confirmCarry=false;render();break;
