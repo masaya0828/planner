@@ -296,7 +296,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const NOTEI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='16';
+const APP_VERSION='17';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -306,7 +306,7 @@ let S=blank();
 function hmin(h,m=0){return h*60+m}
 /* Routine starts empty: personal routines are entered in the app or imported, never kept in this public file. */
 function defaultRoutine(){return{wd:[],sun:[]}}
-function blank(){return{v:1,cats:CATS_DEF.map(c=>({...c})),tasks:[],goals:[],dls:[],events:[],ygoals:[],wish:[],jots:[],notes:{},dnotes:{},routine:defaultRoutine()}}
+function blank(){return{v:1,cats:CATS_DEF.map(c=>({...c})),tasks:[],goals:[],dls:[],events:[],mevents:[],ygoals:[],wish:[],jots:[],notes:{},dnotes:{},routine:defaultRoutine()}}
 const isDay=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const isMo=v=>typeof v==='string'&&/^\d{4}-\d{2}$/.test(v);
 const okMin=v=>typeof v==='number'&&v>=0&&v<1440;
@@ -321,7 +321,8 @@ function norm(o){const b=blank();if(!o||typeof o!=='object')return b;
   if(Array.isArray(o.ygoals))b.ygoals=o.ygoals.filter(g=>g&&g.t&&Number.isInteger(+g.y)).map(g=>({id:id(g.id),y:+g.y,t:String(g.t),cat:ck.has(g.cat)?g.cat:'etc',done:!!g.done,memo:String(g.memo||'')}));
   if(Array.isArray(o.wish))b.wish=o.wish.filter(w=>w&&w.t).map(w=>({id:id(w.id),t:String(w.t),cat:ck.has(w.cat)?w.cat:'etc',done:!!w.done,doneAt:isDay(w.doneAt)?w.doneAt:'',memo:String(w.memo||'')}));
   if(Array.isArray(o.jots))b.jots=o.jots.filter(j=>j&&j.t).map(j=>({id:id(j.id),at:String(j.at||''),t:String(j.t),pin:!!j.pin}));
-  if(Array.isArray(o.events))b.events=o.events.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,end:isDay(e.end)&&e.end>e.date?e.end:'',t:String(e.t),memo:String(e.memo||'')}));
+  if(Array.isArray(o.events))b.events=o.events.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,t:String(e.t),memo:String(e.memo||'')}));
+  if(Array.isArray(o.mevents))b.mevents=o.mevents.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,end:isDay(e.end)&&e.end>e.date?e.end:'',t:String(e.t),memo:String(e.memo||'')}));
   if(Array.isArray(o.dls))b.dls=o.dls.filter(d=>d&&d.t&&isDay(d.date)).map(d=>({id:id(d.id),t:String(d.t),date:d.date}));
   ['notes','dnotes'].forEach(f=>{if(o[f]&&typeof o[f]==='object')Object.keys(o[f]).forEach(k=>{if(isDay(k)&&o[f][k])b[f][k]=String(o[f][k])})});
   return b}
@@ -388,7 +389,7 @@ async function sync(){
 }
 function resolveConflict(useServer){if(!conflict)return;const c=conflict;conflict=null;base=c.version;
   if(useServer){S=norm(c.state);dirty=false;saveLocal();render();idleStatus()}else{dirty=true;saveLocal();render();sync()}}
-const hasData=s=>!!(s.tasks.length||s.goals.length||s.dls.length||Object.keys(s.notes).length||Object.keys(s.dnotes).length||s.events.length||s.ygoals.length||s.wish.length||s.jots.length||s.routine.wd.length||s.routine.sun.length);
+const hasData=s=>!!(s.tasks.length||s.goals.length||s.dls.length||Object.keys(s.notes).length||Object.keys(s.dnotes).length||s.events.length||s.mevents.length||s.ygoals.length||s.wish.length||s.jots.length||s.routine.wd.length||s.routine.sun.length);
 async function connect(url,token){
   const c={url:url.trim(),token:token.trim()};
   if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(c.url))return{msg:'URLは https://script.google.com/ で始まる「ウェブアプリ」のURLを貼り付けてください。',err:true};
@@ -599,12 +600,12 @@ function renderMonth(){
   h+=`</section>`;
   const ga=h;h='';
   const mStart=moSel+'-01',mEnd=moAdd(moSel,1)+'-01',tk=todayKey();
-  const mev=S.events.filter(e=>e.date<mEnd&&(e.end||e.date)>=mStart).sort((a,b)=>a.date.localeCompare(b.date)||a.t.localeCompare(b.t));
+  const mev=S.mevents.filter(e=>e.date<mEnd&&(e.end||e.date)>=mStart).sort((a,b)=>a.date.localeCompare(b.date)||a.t.localeCompare(b.t));
   h+=`<section><h2>イベント<span class="cnt">${mev.length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addmev">＋ 追加</button></h2>`;
   if(mev.length){h+=`<ul class="list">`+mev.map(e=>{const last=e.end||e.date,n=dayDiff(tk,e.date),
       lbl=last<tk?'終了':e.date<=tk?(e.end?'開催中':'今日'):`あと${n}日`;
-    return `<li class="${last<tk?'past':''}"><span class="dl-date">${md(e.date)}<small>（${wdOf(e.date)}）${e.end?`<br>〜${md(e.end)}（${wdOf(e.end)}）`:''}</small></span><button class="tbody" data-act="evedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button><span class="left ${last>=tk&&n<=7?'soon':''}">${lbl}</span></li>`}).join('')+`</ul>`}
-  else h+=`<div class="mini-empty">学会、発表、旅行など、この月の予定を入れておけます。入れた予定は「今日」の画面の「この日の予定」にも出ます。</div>`;
+    return `<li class="${last<tk?'past':''}"><span class="dl-date">${md(e.date)}<small>（${wdOf(e.date)}）${e.end?`<br>〜${md(e.end)}（${wdOf(e.end)}）`:''}</small></span><button class="tbody" data-act="mevedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button><span class="left ${last>=tk&&n<=7?'soon':''}">${lbl}</span></li>`}).join('')+`</ul>`}
+  else h+=`<div class="mini-empty">学会、発表、旅行など、この月の主なイベントを入れておけます。</div>`;
   h+=`</section>`;
   const dls=S.dls.filter(d=>d.date&&d.date.slice(0,7)===moSel).sort((a,b)=>a.date.localeCompare(b.date));
   h+=`<section><h2>締め切り<span class="cnt">${dls.length}</span><span class="sp"></span><button class="linkbtn" data-act="adddl">＋ 追加</button></h2>`;
@@ -680,9 +681,9 @@ function openGoal(g){sh=g?{mode:'goal',...JSON.parse(JSON.stringify(g))}:{mode:'
 function openDl(d){const t=todayKey();sh=d?{mode:'dl',...JSON.parse(JSON.stringify(d))}:{mode:'dl',id:null,t:'',date:moSel===t.slice(0,7)?t:moSel+'-01'};renderSheet()}
 function readSheet(){if(!sh)return;const v=id=>{const e=document.getElementById(id);return e?e.value:undefined};
   if(v('f-text')!==undefined)sh.t=v('f-text');
-  if(['task','goal','ev','yg','wish'].includes(sh.mode)){const mv=v('f-memo');if(mv!==undefined)sh.memo=mv}
+  if(['task','goal','ev','mev','yg','wish'].includes(sh.mode)){const mv=v('f-memo');if(mv!==undefined)sh.memo=mv}
   if(sh.mode==='jot'){const jv=v('f-jtext');if(jv!==undefined)sh.t=jv}
-  if(sh.mode==='ev'){const dv=v('f-evdate');if(dv!==undefined)sh.date=dv;const de=v('f-evend');if(de!==undefined)sh.end=de||''}
+  if(sh.mode==='ev'||sh.mode==='mev'){const dv=v('f-evdate');if(dv!==undefined)sh.date=dv;const de=v('f-evend');if(de!==undefined)sh.end=de||''}
   if(sh.mode==='task'){const dv=v('f-date');if(dv!==undefined)sh.date=dv||null;const gv=v('f-goal');if(gv!==undefined)sh.goal=gv||null}
   if(sh.mode==='dl'){const dd=v('f-dldate');if(dd!==undefined)sh.date=dd}
   if(sh.mode==='block'){const a=v('f-bs'),b=v('f-be');if(a!==undefined)sh.s=toMin(a);if(b!==undefined)sh.e=toMin(b)}}
@@ -702,9 +703,9 @@ function catSection(){
 function openCat(k){const c=k?cats().find(x=>x.k===k):null;const used=new Set(cats().map(x=>x.c));
   sh=c?{mode:'cat',id:c.k,t:c.n,c:c.c}:{mode:'cat',id:null,t:'',c:[0,1,2,3,5,6,7,4].find(i=>!used.has(i))??0};renderSheet()}
 function evSection(){
-  const own=S.events.filter(e=>e.date<=sel&&sel<=(e.end||e.date)),cal=calFor(sel).slice().sort((a,b)=>(b.allDay-a.allDay)||String(a.s).localeCompare(String(b.s)));
+  const own=S.events.filter(e=>e.date===sel),cal=calFor(sel).slice().sort((a,b)=>(b.allDay-a.allDay)||String(a.s).localeCompare(String(b.s)));
   const rows=cal.filter(e=>e.allDay).map(e=>`<li><span class="evtag">終日</span><span class="evtitle">${esc(e.t)}</span><span class="evsrc">カレンダー</span></li>`).join('')
-    +own.map(e=>`<li><span class="evtag">終日</span><button class="tbody" data-act="evedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.end?`<span class="meta">${md(e.date)}（${wdOf(e.date)}）〜${md(e.end)}（${wdOf(e.end)}）</span>`:''}${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button></li>`).join('');
+    +own.map(e=>`<li><span class="evtag">終日</span><button class="tbody" data-act="evedit" data-id="${e.id}"><span class="ttext">${esc(e.t)}</span>${e.memo?`<span class="tmemo">${esc(e.memo)}</span>`:''}</button></li>`).join('');
 
   return `<section id="evbox"><h2>この日の予定<span class="cnt">${own.length+cal.filter(e=>e.allDay).length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addev">＋ 追加</button></h2>
     ${rows?`<ul class="list evlist">${rows}</ul>`:'<div class="mini-empty">予定はありません。学会、締め切り日、外出など、その日全体に関わることを入れておけます。</div>'}${calNote()}</section>`;
@@ -805,11 +806,12 @@ function renderSheet(){
   }else if(sh.mode==='jot'){
     body=`<h3>メモを編集</h3><p class="note" style="margin:0">${esc(sh.at||'')}</p>
     <div class="field"><label for="f-jtext">内容</label><textarea id="f-jtext" style="min-height:140px">${esc(sh.t||'')}</textarea></div>`;
-  }else if(sh.mode==='ev'){
-    body=`<h3>${view==='month'?(editing?'イベントを編集':'イベントを追加'):(editing?'予定を編集':'予定を追加')}</h3>
+  }else if(sh.mode==='ev'||sh.mode==='mev'){const isM=sh.mode==='mev';
+    body=`<h3>${isM?(editing?'イベントを編集':'イベントを追加'):(editing?'予定を編集':'予定を追加')}</h3>
     <div class="field"><label for="f-text">内容</label><input type="text" id="f-text" value="${esc(sh.t)}" placeholder="例：学会（大阪）" enterkeyhint="done"></div>
-    <div class="timerow"><div class="field"><label for="f-evdate">日付</label><input type="date" id="f-evdate" value="${esc(sh.date||'')}"></div>
-      <div class="field"><label for="f-evend">終了日（複数日のとき）</label><input type="date" id="f-evend" value="${esc(sh.end||'')}"></div></div>
+    ${isM?`<div class="timerow"><div class="field"><label for="f-evdate">日付</label><input type="date" id="f-evdate" value="${esc(sh.date||'')}"></div>
+      <div class="field"><label for="f-evend">終了日（複数日のとき）</label><input type="date" id="f-evend" value="${esc(sh.end||'')}"></div></div>`
+      :`<div class="field"><label for="f-evdate">日付</label><input type="date" id="f-evdate" value="${esc(sh.date||'')}"></div>`}
     <div class="field"><label for="f-memo">メモ（備考）</label><textarea id="f-memo" style="min-height:70px" placeholder="場所、持ち物など">${esc(sh.memo||'')}</textarea></div>`;
   }else if(sh.mode==='cat'){
     const n=sh.id?S.tasks.filter(t=>t.cat===sh.id).length+S.goals.filter(g=>g.cat===sh.id).length:0;
@@ -842,9 +844,10 @@ function saveSheet(){readSheet();const text=(sh.t||'').trim();
       :{id:sh.id||uid(),t:text,cat:sh.cat,done:!!sh.done,doneAt:sh.doneAt||'',memo:(sh.memo||'').trim()};
     const i=arr.findIndex(x=>x.id===o.id);i>=0?arr[i]=o:arr.push(o);sh=null;renderSheet();persist();return}
   if(sh.mode==='jot'){if(!text){sheetErr('内容を入力してください。');return}const j=S.jots.find(x=>x.id===sh.id);if(j)j.t=text;sh=null;renderSheet();persist();return}
-  if(sh.mode==='ev'){if(!text){sheetErr('内容を入力してください。');return}if(!isDayK(sh.date)){sheetErr('日付を入力してください。');return}
-    if(sh.end&&!isDayK(sh.end))sh.end='';if(sh.end&&sh.end<sh.date){sheetErr('終了日は開始日と同じか、それより後にしてください。');return}
-    const o={id:sh.id||uid(),date:sh.date,end:sh.end&&sh.end>sh.date?sh.end:'',t:text,memo:(sh.memo||'').trim()},i=S.events.findIndex(x=>x.id===o.id);i>=0?S.events[i]=o:S.events.push(o);
+  if(sh.mode==='ev'||sh.mode==='mev'){if(!text){sheetErr('内容を入力してください。');return}if(!isDayK(sh.date)){sheetErr('日付を入力してください。');return}
+    if(sh.end&&!isDayK(sh.end))sh.end='';if(sh.mode==='mev'&&sh.end&&sh.end<sh.date){sheetErr('終了日は開始日と同じか、それより後にしてください。');return}
+    const arr=sh.mode==='mev'?S.mevents:S.events,o=sh.mode==='mev'?{id:sh.id||uid(),date:sh.date,end:sh.end&&sh.end>sh.date?sh.end:'',t:text,memo:(sh.memo||'').trim()}:{id:sh.id||uid(),date:sh.date,t:text,memo:(sh.memo||'').trim()};
+    const i=arr.findIndex(x=>x.id===o.id);i>=0?arr[i]=o:arr.push(o);
     sh=null;renderSheet();persist();return}
   if(sh.mode==='cat'){if(!text){sheetErr('名前を入力してください。');return}
     const cs=cats().map(c=>({...c}));if(cs.some(c=>c.n===text&&c.k!==sh.id)){sheetErr('同じ名前のカテゴリがあります。');return}
@@ -863,7 +866,7 @@ function saveSheet(){readSheet();const text=(sh.t||'').trim();
   else{if(!sh.date)return;const o={id:sh.id||uid(),t:text,date:sh.date};const i=S.dls.findIndex(x=>x.id===o.id);i>=0?S.dls[i]=o:S.dls.push(o)}
   sh=null;renderSheet();persist();}
 function delSheet(){if(sh.mode==='yg'||sh.mode==='wish'||sh.mode==='jot'){const f=sh.mode==='yg'?'ygoals':sh.mode==='wish'?'wish':'jots';S[f]=S[f].filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
-  if(sh.mode==='ev'){S.events=S.events.filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
+  if(sh.mode==='ev'||sh.mode==='mev'){const f=sh.mode==='mev'?'mevents':'events';S[f]=S[f].filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
   if(sh.mode==='cat'){if(!sh.armed){readSheet();sh.armed=true;renderSheet();return}
     const k=sh.id;S.cats=cats().filter(c=>c.k!==k);S.tasks.forEach(t=>{if(t.cat===k)t.cat='etc'});S.goals.forEach(g=>{if(g.cat===k)g.cat='etc'});sh=null;renderSheet();persist();return}
   if(sh.mode==='block'){S.routine[sh.pat].splice(sh.idx,1);rsel=null;sh=null;renderSheet();persist();return}
@@ -936,7 +939,8 @@ document.addEventListener('click',e=>{
     case 'jpin':{const j=S.jots.find(x=>x.id===id);if(j){j.pin=!j.pin;persist()}break}
     case 'jot-add':{const ta=document.getElementById('f-jot'),v=(ta.value||'').trim();if(!v){ta.focus();break}S.jots.push({id:uid(),at:nowStamp(),t:v,pin:false});jq='';jotDraft='';persist();break}
     case 'tlfold':tlOpen=!tlOpen;try{localStorage.setItem('planner-tl-open',tlOpen?'1':'0')}catch(_){}drawTl();break;
-    case 'addmev':openEv(null);if(sh){const t=todayKey();sh.date=moSel===t.slice(0,7)?t:moSel+'-01';renderSheet()}break;
+    case 'addmev':{const t=todayKey();sh={mode:'mev',id:null,t:'',date:moSel===t.slice(0,7)?t:moSel+'-01',end:'',memo:''};renderSheet();break}
+    case 'mevedit':{const e=S.mevents.find(x=>x.id===id);if(e){sh={mode:'mev',...JSON.parse(JSON.stringify(e))};renderSheet()}break}
     case 'addev':openEv(null);break;
     case 'evedit':openEv(S.events.find(x=>x.id===id));break;
     case 'addcat':openCat(null);break;
