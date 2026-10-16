@@ -136,13 +136,6 @@ details.wdone summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4
 .tlev .tt{overflow-wrap:anywhere}
 .tlnow{position:absolute;left:46px;right:0;border-top:2px solid var(--danger);pointer-events:none}
 .tlnow::before{content:"";position:absolute;left:-5px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--danger)}
-.dayc{min-width:0;display:flex;flex-direction:column;gap:6px}
-.evmini{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
-.evmini li{display:flex;align-items:baseline;gap:8px;font-size:13px;min-width:0}
-.evmini .evtag{font-size:11px;padding:1px 6px;min-width:40px}
-.evmini .evt{min-width:0;overflow-wrap:anywhere}
-.evmini button.evt{all:unset;cursor:pointer;min-width:0;overflow-wrap:anywhere}
-.evmini button.evt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sun-tag{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:1px 6px}
 
 .review{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
@@ -303,7 +296,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const NOTEI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='13';
+const APP_VERSION='14';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -421,7 +414,7 @@ function calNote(){if(!conn)return '';
   if(calErr==='old')return '<p class="note" style="margin:8px 0 0">スプレッドシートのスクリプトを更新すると、Googleカレンダーの予定も表示されます。</p>';
   if(calErr)return '<p class="note" style="margin:8px 0 0">カレンダーの予定を読み込めませんでした（前回の内容を表示しています）。</p>';
   return ''}
-function maybeCal(){const wk=view==='week'?wkSel:monday(sel);if((view==='today'||view==='week')&&conn&&navigator.onLine&&!calBusy[wk]&&(!calAt[wk]||Date.now()-calAt[wk]>6e5))fetchCal(wk)}
+function maybeCal(){const wk=monday(sel);if(view==='today'&&conn&&navigator.onLine&&!calBusy[wk]&&(!calAt[wk]||Date.now()-calAt[wk]>6e5))fetchCal(wk)}
 async function fetchCal(wk){calBusy[wk]=1;
   try{const j=await call(conn,'events',{from:wk,to:addDays(wk,7)});
     weekDays(wk).forEach(d=>{cal[d]=[]});(j.events||[]).forEach(e=>{if(cal[e.date])cal[e.date].push({t:String(e.t||'（無題）'),allDay:!!e.allDay,s:e.s||'',e:e.e||''})});
@@ -429,7 +422,7 @@ async function fetchCal(wk){calBusy[wk]=1;
     const keep=new Set(Object.keys(calAt).sort().slice(-6));Object.keys(calAt).forEach(k=>{if(!keep.has(k)){delete calAt[k];weekDays(k).forEach(d=>delete cal[d])}});
     try{localStorage.setItem(CALK,JSON.stringify({cal,calAt}))}catch(e){}
   }catch(e){calErr=e&&e.error==='bad_action'?'old':'err';calAt[wk]=Date.now()}
-  finally{delete calBusy[wk];drawEv();if(view==='week'&&wkSel===wk&&!drag)render()}}
+  finally{delete calBusy[wk];drawEv()}}
 function boot(){loadLocal();loaded=true;render();idleStatus();if(conn)sync();
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(view==='today')drawDial();sync();maybeCal()}});
   window.addEventListener('online',()=>{sync();maybeCal()});window.addEventListener('offline',()=>idleStatus());
@@ -564,13 +557,6 @@ function renderToday(){
   setTimeout(maybeCal,0);
   return `<div class="cols c-today"><div class="col col-a">${a}</div><div class="col col-b">${h}</div></div>`;
 }
-function dayEvents(k){
-  const cal=calFor(k),own=S.events.filter(e=>e.date===k);
-  const rows=cal.filter(e=>e.allDay).map(e=>`<li><span class="evtag">終日</span><span class="evt">${esc(e.t)}</span></li>`)
-    .concat(own.map(e=>`<li><span class="evtag">終日</span><button class="evt" data-act="evedit" data-id="${e.id}">${esc(e.t)}</button></li>`))
-    .concat(cal.filter(e=>!e.allDay).sort((a,b)=>String(a.s).localeCompare(String(b.s))).map(e=>`<li><span class="evtag">${esc(e.s)}</span><span class="evt">${esc(e.t)}</span></li>`));
-  return rows.length?`<ul class="evmini" aria-label="${md(k)}の予定">${rows.join('')}</ul>`:'';
-}
 function renderWeek(){
   const days=weekDays(wkSel);const t=todayKey();
   setHead(`第${isoWeek(wkSel)}週${days.includes(t)?' · 今週':''}`,`${md(days[0])}（月）– ${md(days[6])}（日）`,
@@ -579,10 +565,9 @@ function renderWeek(){
   const un=`<section class="o1"><h2>今週中にやること（日付未定）<span class="cnt">${u.length}</span><span class="sp"></span><button class="linkbtn" data-act="addtask" data-date="">＋ 追加</button></h2>${u.length?list(u):'<div class="mini-empty">月の目標から、今週やることをここに入れておくと便利です。</div>'}</section>`;
   let h=`<section class="o2"><h2>曜日ごとの予定</h2><div class="days">`;
   days.forEach(k=>{const it=tasksOn(k);const sun=parse(k).getDay()===0;
-    h+=`<div class="day"><div class="dayhd ${k===t?'today':''}"><b>${wdOf(k)}</b><span class="d">${md(k)}</span><span class="sp"></span><button class="add" data-act="addtask" data-date="${k}" aria-label="${md(k)}にタスクを追加">＋</button></div><div class="dayc">${dayEvents(k)}${it.length?list(it):(dayEvents(k)?'':'<div class="mini-empty">予定なし</div>')}</div></div>`});
+    h+=`<div class="day"><div class="dayhd ${k===t?'today':''}"><b>${wdOf(k)}</b><span class="d">${md(k)}</span><span class="sp"></span><button class="add" data-act="addtask" data-date="${k}" aria-label="${md(k)}にタスクを追加">＋</button></div>${it.length?list(it):'<div class="mini-empty">予定なし</div>'}</div>`});
   h+=`</div></section>`;
   const sb=sampleBox();
-  setTimeout(maybeCal,0);
   return `<div class="cols c-week"><div class="col col-a">${h}</div><div class="col col-b">${un}${renderReview()}${sb?`<div class="o4">${sb}</div>`:''}</div></div>`;
 }
 function renderReview(){
