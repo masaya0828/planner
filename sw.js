@@ -2,7 +2,7 @@
 // (so updates appear as soon as you are online) and fall back to the saved copy.
 // Requests to Google (the spreadsheet sync and fonts) are never intercepted.
 // When you change any file, raise the number in CACHE so phones pick up the new version.
-const CACHE = 'planner-v20';
+const CACHE = 'planner-v21';
 const ASSETS = [
   './',
   './index.html',
@@ -31,7 +31,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   e.respondWith(
-    fetch(req)
+    // no-cache: always ask GitHub whether the file changed, so a new version shows up right away
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
