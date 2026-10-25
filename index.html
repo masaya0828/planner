@@ -59,6 +59,18 @@ header.top{position:sticky;top:0;z-index:5;background:var(--bg);padding-top:calc
 h1{font-size:24px;font-weight:700;margin:0;line-height:1.25;text-wrap:balance}
 .nav{display:flex;gap:6px}
 .nav button{border:1px solid var(--line);background:var(--surface);border-radius:999px;min-width:38px;height:36px;padding:0 10px;font-size:14px}
+.recs{display:flex;flex-direction:column;gap:10px}
+.rec{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.rechd{display:flex;align-items:center;gap:8px}
+.recdone{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted)}
+.recdone li{display:flex;align-items:flex-start;gap:6px}
+.recdone svg{width:13px;height:13px;flex:none;margin-top:3px;stroke:var(--accent)}
+.rectx{width:100%;box-sizing:border-box;border:0;border-top:1px dashed var(--line);border-radius:0;background:transparent;padding:8px 0 2px;font:inherit;font-size:14.5px;line-height:1.6;color:var(--ink);resize:none;min-height:56px;overflow:hidden}
+.rectx:focus{outline:none;border-top-color:var(--accent)}
+.recadd{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.recchip{border:1px dashed color-mix(in srgb,var(--cc) 50%,transparent);cursor:pointer;font:inherit;font-size:12.5px;padding:6px 10px}
+.planbtn{display:inline-flex;align-items:center;gap:7px}
+.planbtn svg{width:16px;height:16px}
 .status{font-size:11px;color:var(--muted);text-align:right;margin-top:2px}
 .status.err{color:var(--danger)}
 
@@ -391,7 +403,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const RESI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='21';
+const APP_VERSION='23';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -401,7 +413,7 @@ let S=blank();
 function hmin(h,m=0){return h*60+m}
 /* Routine starts empty: personal routines are entered in the app or imported, never kept in this public file. */
 function defaultRoutine(){return{wd:[],sun:[]}}
-function blank(){return{v:1,cats:CATS_DEF.map(c=>({...c})),tasks:[],goals:[],dls:[],events:[],mevents:[],projects:[],miles:[],plogs:[],calSel:{ids:null,def:''},notes:{},dnotes:{},routine:defaultRoutine()}}
+function blank(){return{v:1,cats:CATS_DEF.map(c=>({...c})),tasks:[],goals:[],dls:[],events:[],mevents:[],projects:[],miles:[],plogs:[],calSel:{ids:null,def:''},notes:{},dnotes:{},dlogs:{},routine:defaultRoutine()}}
 const isDay=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const isMo=v=>typeof v==='string'&&/^\d{4}-\d{2}$/.test(v);
 const okMin=v=>typeof v==='number'&&v>=0&&v<1440;
@@ -422,6 +434,9 @@ function norm(o){const b=blank();if(!o||typeof o!=='object')return b;
   if(o.calSel&&typeof o.calSel==='object')b.calSel={ids:Array.isArray(o.calSel.ids)&&o.calSel.ids.length?o.calSel.ids.map(String):null,def:String(o.calSel.def||'')};
   if(Array.isArray(o.dls))b.dls=o.dls.filter(d=>d&&d.t&&isDay(d.date)).map(d=>({id:id(d.id),t:String(d.t),date:d.date}));
   ['notes','dnotes'].forEach(f=>{if(o[f]&&typeof o[f]==='object')Object.keys(o[f]).forEach(k=>{if(isDay(k)&&o[f][k])b[f][k]=String(o[f][k])})});
+  // dlogs: { 'YYYY-MM-DD': { categoryKey: text } }
+  if(o.dlogs&&typeof o.dlogs==='object')Object.keys(o.dlogs).forEach(d=>{const L=o.dlogs[d];if(!isDay(d)||!L||typeof L!=='object')return;const r={};
+    Object.keys(L).forEach(k=>{const v=String(L[k]??'');if(!v.trim())return;const kk=ck.has(k)?k:'etc';r[kk]=r[kk]?r[kk]+'\n'+v:v});if(Object.keys(r).length)b.dlogs[d]=r});
   return b}
 let view='today', sel=todayKey(), wkSel=monday(sel), moSel=sel.slice(0,7);
 let loaded=false, dirty=false, timer=null, confirmCarry=false, confirmClear=false;
@@ -469,7 +484,7 @@ function errText(e){const k=e&&e.error;
     :k==='network'?'接続できませんでした。URLと通信状態、公開範囲が「全員」になっているかを確認してください'
     :'同期できませんでした'+(k?'（'+k+'）':'')}
 const hhmmNow=()=>{const d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())};
-const typing=()=>{const a=document.activeElement;return !!(a&&(a.id==='f-note'||a.id==='f-dnote'||a.closest&&a.closest('.sheet')))};
+const typing=()=>{const a=document.activeElement;return !!(a&&(a.id==='f-note'||a.id==='f-dnote'||a.classList&&a.classList.contains('rectx')||a.closest&&a.closest('.sheet')))};
 async function sync(){
   if(!conn||conflict)return idleStatus();
   if(syncing){again=true;return}
@@ -486,7 +501,7 @@ async function sync(){
 }
 function resolveConflict(useServer){if(!conflict)return;const c=conflict;conflict=null;base=c.version;
   if(useServer){S=norm(c.state);dirty=false;saveLocal();render();idleStatus()}else{dirty=true;saveLocal();render();sync()}}
-const hasData=s=>!!(s.tasks.length||s.goals.length||s.dls.length||Object.keys(s.notes).length||Object.keys(s.dnotes).length||s.events.length||s.mevents.length||s.projects.length||s.routine.wd.length||s.routine.sun.length);
+const hasData=s=>!!(s.tasks.length||s.goals.length||s.dls.length||Object.keys(s.notes).length||Object.keys(s.dnotes).length||Object.keys(s.dlogs).length||s.events.length||s.mevents.length||s.projects.length||s.routine.wd.length||s.routine.sun.length);
 async function connect(url,token){
   const c={url:url.trim(),token:token.trim()};
   if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(c.url))return{msg:'URLは https://script.google.com/ で始まる「ウェブアプリ」のURLを貼り付けてください。',err:true};
@@ -704,6 +719,8 @@ function renderToday(){
   h+=`</section>`;
   let m=`<section class="o2"><h2><label for="f-dnote">この日のメモ</label></h2><textarea id="f-dnote" style="background:var(--surface)" placeholder="気づいたこと、実験の条件、明日に回すことなど">${esc(S.dnotes[sel]||'')}</textarea></section>`;
   if(pull.length)h+=`<section class="o3"><h2>今週中にやること（日付未定）<span class="cnt">${pull.length}</span></h2>${list(pull,{pull:true})}</section>`;
+  m+=recSection();
+  m+=`<div class="o2"><button class="btn ghost planbtn" data-act="dayplan">${SHARE}この日の計画を書き出す</button></div>`;
   const sb=sampleBox();if(sb)m+=`<div class="o4">${sb}</div>`;
   setTimeout(maybeCal,0);
   return `${cdSection()}<div class="cols c-today"><div class="col col-a">${evSection()}</div><div class="col col-b">${dialCard()}</div></div>
@@ -717,6 +734,29 @@ function weekDls(){
   return `<section><h2>締め切り<span class="cnt">${ds.length||''}</span><span class="note" style="font-weight:400">今週から3週間</span><span class="sp"></span><button class="linkbtn" data-act="adddl">＋ 追加</button></h2>
     ${rows?`<ul class="list">${rows}</ul>`:'<div class="mini-empty">この3週間の締め切りはありません。</div>'}</section>`;
 }
+/* ---------- day record: free text per category, with the day's completed tasks ---------- */
+let recOpen=new Set(),recDay=null;
+function recPh(c){const n=c.n;
+  return /研究|実験/.test(n)?'例：qPCR 2回目。Gapdhで正規化して再解析、Ct値のばらつき大きい'
+    :/ラン|走|運動|ジム/.test(n)?'例：ジョグ 10km 55分。後半ペース上げられた'
+    :/英語|英会話|TOEFL/.test(n)?'例：TOEFL Listening 模試1回（正答率70%）、ラジオ英会話'
+    :/読書|本/.test(n)?'例：『〇〇』3章まで（40ページ）'
+    :'例：やったこと、時間や量、気づいたこと'}
+function recSection(){
+  if(recDay!==sel){recOpen=new Set();recDay=sel}
+  const L=S.dlogs[sel]||{},done=S.tasks.filter(t=>t.date===sel&&t.done),cs=cats();
+  const has=c=>!!L[c.k]||done.some(t=>catOf(t.cat).k===c.k)||recOpen.has(c.k);
+  const shown=cs.filter(has),rest=cs.filter(c=>!has(c));
+  let h=`<section class="o2" id="recbox"><h2>この日の記録<span class="cnt">${Object.keys(L).length||''}</span></h2>`;
+  h+=shown.length?`<div class="recs">${shown.map(c=>{const dt=done.filter(t=>catOf(t.cat).k===c.k);
+      return `<div class="rec"><div class="rechd"><span class="chip cc-${c.c}">${esc(c.n)}</span>${dt.length?`<span class="note">完了したタスク ${dt.length}件</span>`:''}</div>
+        ${dt.length?`<ul class="recdone">${dt.map(t=>`<li>${CHECK}<span>${esc(t.t)}</span></li>`).join('')}</ul>`:''}
+        <textarea class="rectx" data-rec="${esc(c.k)}" rows="2" aria-label="${esc(c.n)}の記録" placeholder="${esc(recPh(c))}">${esc(L[c.k]||'')}</textarea></div>`}).join('')}</div>`
+    :'<div class="mini-empty">下のカテゴリを押すと、そのカテゴリの記録欄が出ます。完了したタスクも、カテゴリごとにここへ並びます。</div>';
+  if(rest.length)h+=`<div class="recadd"><span class="note">＋ 記録する</span>${rest.map(c=>`<button class="chip cc-${c.c} recchip" data-act="recadd" data-k="${esc(c.k)}">${esc(c.n)}</button>`).join('')}</div>`;
+  return h+`</section>`}
+function grow(t){t.style.height='auto';t.style.height=(t.scrollHeight+2)+'px'}
+function growAll(){document.querySelectorAll('.rectx').forEach(grow)}
 /* ---------- week view: a timeline of Google Calendar events (3 days on a phone, 7 on a wide screen) ---------- */
 const WK_PX=40; // height of one hour
 let wkPage=null,wkDaySel=null;
@@ -884,7 +924,7 @@ function render(){
   const main=document.getElementById('main');
   if(!loaded){main.innerHTML='<div class="empty">データを読み込んでいます…</div>';return}
   main.innerHTML=conflictBox()+(view==='today'?renderToday():view==='week'?renderWeek():view==='month'?renderMonth():view==='research'?renderResearch():renderSettings());
-  if(view==='today')fixTl();
+  if(view==='today'){fixTl();growAll()}
   const t=todayKey();const d=parse(t);
   document.getElementById('tabs').innerHTML=[['today','今日',d.getDate()],['week','週','W'+isoWeek(t)],['month','月',(d.getMonth()+1)+'月'],['research','研究',RESI],['settings','設定',GEAR]]
     .map(([k,n,b])=>`<button data-act="tab" data-v="${k}" ${view===k?'aria-current="page"':''}>${k==='settings'||k==='research'?b:`<b>${b}</b>`}${n}</button>`).join('');
@@ -1103,6 +1143,14 @@ function renderSheet(){
       <div class="actions"><button type="button" class="btn ghost" data-act="sh-close">閉じる</button><span class="sp"></span>
         <button type="button" class="btn ghost" data-act="ex-copy">コピー</button><button type="button" class="btn" data-act="ex-save" id="ex-save">ファイルに保存</button></div></div></div>`;
     root.hidden=false;document.getElementById('fab').hidden=true;return;
+  }else if(sh.mode==='dayplan'){
+    root.innerHTML=`<div class="overlay" data-act="sh-bg"><div class="sheet" role="dialog" aria-modal="true"><h3>${md(sh.d)}（${wdOf(sh.d)}）の計画を書き出す</h3>
+      <p class="note" style="margin:0">予定・ルーティン・やること・記録・メモをまとめた文章です。送る前にここで書き直すこともできます。</p>
+      <textarea id="f-plan" style="min-height:260px;font-size:13.5px;line-height:1.6">${esc(planText(sh.d))}</textarea>
+      <p class="note" id="dp-msg" style="margin:0" aria-live="polite"></p>
+      <div class="actions"><button type="button" class="btn ghost" data-act="sh-close">閉じる</button><span class="sp"></span>
+        <button type="button" class="btn ghost" data-act="dp-file">ファイルに保存</button>${navigator.share?'<button type="button" class="btn ghost" data-act="dp-share">共有</button>':''}<button type="button" class="btn" data-act="dp-copy">コピー</button></div></div></div>`;
+    root.hidden=false;document.getElementById('fab').hidden=true;return;
   }else if(sh.mode==='proj'){
     const nm=S.miles.filter(m=>m.pid===sh.id).length,nl=S.plogs.filter(l=>l.pid===sh.id).length;
     body=`<h3>${editing?'テーマを編集':'テーマを追加'}</h3>
@@ -1195,12 +1243,31 @@ function delSheet(){if(sh.mode==='gev'){if(!sh.busy)gevDel();return}
   if(sh.mode==='mile'||sh.mode==='plog'){const f=sh.mode==='mile'?'miles':'plogs';S[f]=S[f].filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
   if(sh.mode==='ev'||sh.mode==='mev'){const f=sh.mode==='mev'?'mevents':'events';S[f]=S[f].filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
   if(sh.mode==='cat'){if(!sh.armed){readSheet();sh.armed=true;renderSheet();return}
-    const k=sh.id;S.cats=cats().filter(c=>c.k!==k);S.tasks.forEach(t=>{if(t.cat===k)t.cat='etc'});S.goals.forEach(g=>{if(g.cat===k)g.cat='etc'});sh=null;renderSheet();persist();return}
+    const k=sh.id;S.cats=cats().filter(c=>c.k!==k);S.tasks.forEach(t=>{if(t.cat===k)t.cat='etc'});S.goals.forEach(g=>{if(g.cat===k)g.cat='etc'});
+    Object.values(S.dlogs).forEach(L=>{if(L[k]!=null){L.etc=L.etc?L.etc+'\n'+L[k]:L[k];delete L[k]}});sh=null;renderSheet();persist();return}
   if(sh.mode==='block'){S.routine[sh.pat].splice(sh.idx,1);rsel=null;sh=null;renderSheet();persist();return}
   if(sh.mode==='task')S.tasks=S.tasks.filter(x=>x.id!==sh.id);
   else if(sh.mode==='goal'){S.goals=S.goals.filter(x=>x.id!==sh.id);S.tasks.forEach(t=>{if(t.goal===sh.id)t.goal=null})}
   else S.dls=S.dls.filter(x=>x.id!==sh.id);sh=null;renderSheet();persist()}
 
+const SHARE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+/* plain-text plan of one day: all-day items, routine + calendar in time order, tasks, memo */
+function planText(d){const dd=parse(d),L=[`${dd.getFullYear()}年${dd.getMonth()+1}月${dd.getDate()}日（${wdOf(d)}）の計画`];
+  const ad=[...S.dls.filter(x=>x.date===d).map(x=>`締切　${x.t}`),
+    ...S.mevents.filter(e=>e.date<=d&&(e.end||e.date)>=d).map(e=>`イベント　${e.t}`),
+    ...calFor(d).filter(e=>e.allDay).map(e=>`終日　${e.t}`),
+    ...S.events.filter(e=>e.date===d).map(e=>`終日　${e.t}${e.memo?`（${e.memo}）`:''}`)];
+  if(ad.length){L.push('','■ この日の予定');ad.forEach(x=>L.push('・'+x))}
+  const rows=S.routine[patKey(d)].map(p=>({a:p.s,k:1,txt:`${hm(p.s)}–${hm(p.e)}　${p.name}`}))
+    .concat(timedOf(d).map(e=>({a:e.a,k:0,txt:`${e.s}–${evEnd(e)}　【予定】${e.t}`}))).sort((x,y)=>x.a-y.a||x.k-y.k);
+  if(rows.length){L.push('','■ タイムライン');rows.forEach(r=>L.push(r.txt))}
+  const tk=tasksOn(d);L.push('','■ この日にやること');
+  if(tk.length)tk.forEach(x=>{L.push(`${x.done?'☑':'□'} ${x.t}${x.exp?'（実験）':''}`);if(x.memo)String(x.memo).split('\n').forEach(m=>m.trim()&&L.push('　　'+m.trim()))});else L.push('（なし）');
+  const rec=S.dlogs[d]||{},rk=cats().filter(c=>(rec[c.k]||'').trim());
+  if(rk.length){L.push('','■ この日の記録');rk.forEach(c=>{L.push(`【${c.n}】`);rec[c.k].trim().split('\n').forEach(x=>L.push(x))})}
+  const memo=(S.dnotes[d]||'').trim();if(memo){L.push('','■ メモ');L.push(memo)}
+  return L.join('\n')}
+function dayFile(){return `計画_${sh.d}.txt`}
 function exportText(){return JSON.stringify({app:'planner',v:1,exportedAt:new Date().toISOString(),data:S},null,1)}
 /* ---------- sample ---------- */
 function addSample(){const t=todayKey();const wk=monday(t);const mo=t.slice(0,7);
@@ -1234,6 +1301,16 @@ document.addEventListener('click',e=>{
     case 'set-disc':setUI={confirmDisc:true};render();break;
     case 'set-disc-no':setUI={};render();break;
     case 'set-disc-yes':disconnect();setUI={msg:'接続を解除しました。データはこの端末に残っています。'};render();break;
+    case 'recadd':{const k=el.dataset.k;recOpen.add(k);const b=document.getElementById('recbox');if(b){b.outerHTML=recSection();growAll()}
+      const t=document.querySelector(`.rectx[data-rec="${CSS.escape(k)}"]`);if(t)t.focus();break}
+    case 'dayplan':sh={mode:'dayplan',d:sel};renderSheet();break;
+    case 'dp-copy':{const ta=document.getElementById('f-plan'),msg=document.getElementById('dp-msg');
+      const fb=()=>{ta.focus();ta.select();msg.textContent='全体を選択しました。コピーしてください。'};
+      try{navigator.clipboard.writeText(ta.value).then(()=>{msg.textContent='コピーしました。'},fb)}catch(_){fb()}break}
+    case 'dp-share':{const v=document.getElementById('f-plan').value;try{navigator.share({title:dayFile().replace('.txt',''),text:v}).catch(()=>{})}catch(_){}break}
+    case 'dp-file':{try{const b=new Blob([document.getElementById('f-plan').value],{type:'text/plain;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');
+      a.href=u;a.download=dayFile();document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
+      document.getElementById('dp-msg').textContent='ファイルを保存しました。'}catch(_){document.getElementById('dp-msg').textContent='保存できませんでした。「コピー」を使ってください。'}break}
     case 'ex-copy':{const ta=document.getElementById('f-export'),msg=document.getElementById('ex-msg');
       const fb=()=>{ta.focus();ta.select();msg.textContent='全体を選択しました。コピーしてください。'};
       try{navigator.clipboard.writeText(ta.value).then(()=>{msg.textContent='コピーしました。'},fb)}catch(_){fb()}break}
@@ -1318,6 +1395,8 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('input',e=>{if(e.target.id==='f-note'){S.notes[wkSel]=e.target.value;persist(false)}
   if(e.target.id==='f-dnote'){const v=e.target.value;if(v)S.dnotes[sel]=v;else delete S.dnotes[sel];persist(false)}
+  if(e.target.classList&&e.target.classList.contains('rectx')){const k=e.target.dataset.rec,v=e.target.value,L=S.dlogs[sel]||(S.dlogs[sel]={});
+    if(v.trim())L[k]=v;else delete L[k];if(!Object.keys(L).length)delete S.dlogs[sel];persist(false);grow(e.target)}
   if(sh&&(e.target.id==='f-bs'||e.target.id==='f-be')){readSheet();const d=document.getElementById('sh-dur');if(d)d.textContent=blockDur()}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&sh&&e.target.id==='f-text'){e.preventDefault();saveSheet()}if(e.key==='Escape'&&sh){sh=null;renderSheet()}
   const seg=e.target.closest&&e.target.closest('#dial .seg');if(seg&&!sh&&(e.key==='Enter'||e.key===' ')){e.preventDefault();rsel=+seg.dataset.i;openBlock(rsel)}});
