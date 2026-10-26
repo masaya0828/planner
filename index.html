@@ -61,6 +61,9 @@ h1{font-size:24px;font-weight:700;margin:0;line-height:1.25;text-wrap:balance}
 .nav button{border:1px solid var(--line);background:var(--surface);border-radius:999px;min-width:38px;height:36px;padding:0 10px;font-size:14px}
 .rsel{font:inherit;font-size:13px;font-weight:700;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px 6px;max-width:40%;min-width:0;text-overflow:ellipsis}
 @media (max-width:479.98px){.rlbl-x{display:none}}
+.tplon{background:var(--accent-soft)}
+.rtplgo{flex:none;align-self:center;font-size:12px;color:var(--accent);white-space:nowrap}
+.tpled{margin-top:12px;border-color:var(--accent)}
 .rsel.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .rtag{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:5px;padding:2px 6px;white-space:nowrap}
 .dialtop{flex-wrap:wrap;row-gap:6px}
@@ -408,7 +411,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const RESI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='24';
+const APP_VERSION='25';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -629,7 +632,11 @@ const validKey=k=>k==='wd'||k==='sun'||!!tplOf(k);
 const patKey=k=>{const o=S.rday&&S.rday[k];return o&&validKey(o)?o:defKey(k)};
 const plansOf=k=>k==='wd'||k==='sun'?S.routine[k]:(tplOf(k)||{slots:[]}).slots;
 const tplName=k=>PATN[k]||(tplOf(k)||{}).name||'';
-const curPlans=()=>plansOf(patKey(sel));
+// In 設定 a template can be opened in the same dial editor without switching any day to it.
+let tplEdit=null;
+const inTplEd=()=>view==='settings'&&!!tplEdit&&validKey(tplEdit);
+const dialKey=()=>inTplEd()?tplEdit:patKey(sel);
+const curPlans=()=>plansOf(dialKey());
 function setDayTpl(d,k){if(k===defKey(d))delete S.rday[d];else S.rday[d]=k;rsel=null;confirmCopy=false;persist()}
 const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
 let rsel=null,drag=null,confirmCopy=false;
@@ -650,7 +657,7 @@ const evEnd=e=>e.b>=1440?'24:00':hm(e.b);
 
 function dialSVG(){
   const plans=curPlans();if(rsel!=null&&!plans[rsel])rsel=null;
-  const isToday=sel===todayKey(),nm=nowMin(),evs=dayEvs(),ne=evs.length?5:6;
+  const ed=inTplEd(),isToday=!ed&&sel===todayKey(),nm=nowMin(),evs=ed?[]:dayEvs(),ne=evs.length?5:6;
   let h=`<circle cx="${DC}" cy="${DC}" r="${(DR+DRI)/2}" fill="none" style="stroke:var(--line)" stroke-width="${DR-DRI}"/>`;
   if(evs.length){h+=`<circle cx="${DC}" cy="${DC}" r="${(ER0+ER1)/2}" fill="none" style="stroke:var(--line)" stroke-width="${ER1-ER0}" opacity=".6"/>`;
     evs.slice().sort((x,y)=>(y.b-y.a)-(x.b-x.a)).forEach(e=>{const lbl=`${e.s}${e.e?'–'+e.e:''} ${e.t}`;
@@ -675,6 +682,7 @@ function dialSVG(){
       h+=`<g class="handle" data-role="${role}" data-i="${rsel}"><circle cx="${x}" cy="${y}" r="22" fill="transparent"/><circle cx="${x}" cy="${y}" r="10" style="fill:var(--surface);stroke:var(--accent)" stroke-width="3"/></g>`})}
   else if(isToday){const ce=curEv(evs,nm),{cur}=nowInfo(plans,nm);top=hm(nm);
     if(ce){big=short(ce.t,ne);sub='〜'+evEnd(ce)}else{big=cur?short(cur.name,ne):'空き時間';sub=cur?'〜'+hm(cur.e):''}}
+  else if(ed){top='テンプレート';big=short(tplName(tplEdit),6)}
   else{top=short(tplName(patKey(sel)),7);big=wdOf(sel)+'曜日';}
   h+=`<text x="${DC}" y="${DC-(sub?20:10)}" text-anchor="middle" dominant-baseline="central" font-size="11.5" font-family="DM Mono, Zen Kaku Gothic New, sans-serif" style="fill:var(--muted)" pointer-events="none">${esc(top)}</text>`;
   h+=`<text x="${DC}" y="${DC+(sub?0:8)}" text-anchor="middle" dominant-baseline="central" font-size="17" font-weight="700" style="fill:var(--ink)" pointer-events="none">${esc(big)}</text>`;
@@ -682,8 +690,8 @@ function dialSVG(){
   return h;
 }
 function dialBar(){
-  const plans=curPlans(),evs=dayEvs(),isToday=sel===todayKey();
-  if(!plans.length&&!(isToday&&evs.length))return `<div class="dialbar"><span class="nm note">「${esc(tplName(patKey(sel)))}」のルーティンはまだありません。下の「＋ 枠を追加」で追加するか、設定からデータを読み込んでください。</span></div>`;
+  const ed=inTplEd(),plans=curPlans(),evs=ed?[]:dayEvs(),isToday=!ed&&sel===todayKey();
+  if(!plans.length&&!(isToday&&evs.length))return `<div class="dialbar"><span class="nm note">「${esc(tplName(dialKey()))}」のルーティンはまだありません。下の「＋ 枠を追加」で追加するか、設定からデータを読み込んでください。</span></div>`;
   if(rsel!=null&&plans[rsel]){const p=plans[rsel];
     return `<div class="dialbar selected"><span class="dot" style="background:${p.c}"></span><span class="nm">${esc(p.name)} <span class="mono">${hm(p.s)}–${hm(p.e)}</span></span><button class="side-btn" data-act="bedit">編集</button><button class="side-btn" data-act="bdone">完了</button></div>`}
   if(isToday){const nm=nowMin(),{cur,next}=nowInfo(plans,nm),ce=curEv(evs,nm),nx=nextEv(evs,nm);
@@ -702,15 +710,23 @@ function dialList(){
 }
 function dialFoot(){
   const plans=curPlans(),over=overlap(plans);let f='';
-  if(dayEvs().length)f+=`<span class="dleg"><i></i>内側の輪：Googleカレンダーの予定</span>`;
+  if(!inTplEd()&&dayEvs().length)f+=`<span class="dleg"><i></i>内側の輪：Googleカレンダーの予定</span>`;
   if(over)f+=`<span class="warnline">時間の重なり ${fmtDur(over)}</span>`;
-  const pk=patKey(sel),pn=esc(tplName(pk));
+  const pk=dialKey(),pn=esc(tplName(pk));
   if(pk!=='wd')f+=confirmCopy?`<span>「${pn}」の枠を平日の内容で置き換えます。</span><button class="side-btn" data-act="copy-yes">置き換える</button><button class="side-btn" data-act="copy-no">やめる</button>`
     :`<button class="linkbtn" data-act="copywd">平日の枠を「${pn}」にコピー</button>`;
   f+=`<button class="btn ghost" data-act="addblock">＋ 枠を追加</button>`;
   return f;
 }
 function dialCard(){
+  if(inTplEd()){const k=tplEdit,custom=!!tplOf(k);
+    return `<section class="dialcard tpled" id="tpled"><div class="dialtop"><span>編集中 · <b>${esc(tplName(k))}</b></span><span class="sp"></span>
+      ${custom?`<button class="linkbtn" data-act="rtpledit" data-id="${esc(k)}">名前・削除</button>`:''}<button class="linkbtn" data-act="rtplclose">閉じる</button></div>
+      <svg id="dial" viewBox="0 0 400 400" role="img" aria-label="${esc(tplName(k))}のルーティン">${dialSVG()}</svg>
+      <div id="dialbar">${dialBar()}</div>
+      <ul class="list rlist" id="diallist" ${curPlans().length?'':'hidden'}>${dialList()}</ul>
+      <div class="dialfoot" id="dialfoot">${dialFoot()}</div>
+      <p class="note" style="margin:0">ここでの変更は、このテンプレートを使うすべての日に反映されます。</p></section>`}
   const pk=patKey(sel),dk=defKey(sel),opt=(k,n)=>`<option value="${esc(k)}" ${k===pk?'selected':''}>${esc(n)}${k===dk?'（標準）':''}</option>`;
   return `<section class="dialcard"><div class="dialtop"><span class="${pk!==dk?'rlbl-x':''}">ルーティン</span>
     <select id="f-rday" class="rsel${pk!==dk?' on':''}" aria-label="この日に使うルーティン">${opt('wd',PATN.wd)}${opt('sun',PATN.sun)}${S.rtpl.map(t=>opt(t.id,t.name)).join('')}<option value="__new">＋ 新しく作る…</option></select>
@@ -723,7 +739,7 @@ function dialCard(){
 }
 function drawDial(){const s=document.getElementById('dial');if(!s)return;s.innerHTML=dialSVG();
   document.getElementById('dialbar').innerHTML=dialBar();document.getElementById('dialfoot').innerHTML=dialFoot();
-  const l=document.getElementById('diallist');if(l){l.innerHTML=dialList();l.hidden=!(dialOpen&&curPlans().length)}}
+  const l=document.getElementById('diallist');if(l){l.innerHTML=dialList();l.hidden=!((dialOpen||inTplEd())&&curPlans().length)}}
 
 /* ---------- views ---------- */
 function renderToday(){
@@ -976,18 +992,19 @@ function readSheet(){if(!sh)return;const v=id=>{const e=document.getElementById(
   if(sh.mode==='dl'){const dd=v('f-dldate');if(dd!==undefined)sh.date=dd}
   if(sh.mode==='rtpl'){const b=v('f-rbase');if(b!==undefined)sh.base=b}
   if(sh.mode==='block'){const a=v('f-bs'),b=v('f-be');if(a!==undefined)sh.s=toMin(a);if(b!==undefined)sh.e=toMin(b)}}
-function openBlock(idx){const pat=patKey(sel),plans=plansOf(pat);
+function openBlock(idx){const pat=dialKey(),plans=plansOf(pat);
   if(idx!=null&&plans[idx]){const p=plans[idx];sh={mode:'block',pat,idx,t:p.name,s:p.s,e:p.e,c:p.c}}
   else{const s=sel===todayKey()?Math.round(nowMin()/SNAP)*SNAP:hmin(12);sh={mode:'block',pat,idx:null,t:'',s:mnorm(s),e:mnorm(s+60),c:RCOL[plans.length%RCOL.length]}}
   renderSheet()}
 /* ---------- routine templates ---------- */
 function rtplSection(){
   const used=k=>Object.values(S.rday).filter(v=>v===k).length;
-  const row=(k,n,meta,edit)=>`<li><span class="dot" style="background:var(--muted);margin-top:6px"></span>${edit?`<button class="tbody" data-act="rtpledit" data-id="${esc(k)}">`:'<span class="tbody">'}<span class="ttext">${esc(n)}</span><span class="meta">${meta}</span>${edit?'</button>':'</span>'}</li>`;
+  const ed=inTplEd()?tplEdit:null;
+  const row=(k,n,meta)=>`<li class="${ed===k?'tplon':''}"><span class="dot" style="background:${ed===k?'var(--accent)':'var(--muted)'};margin-top:6px"></span><button class="tbody" data-act="rtplopen" data-id="${esc(k)}" aria-expanded="${ed===k}"><span class="ttext">${esc(n)}</span><span class="meta">${meta}</span></button><span class="rtplgo">${ed===k?'編集中':'編集 ›'}</span></li>`;
   return `<section><h2>ルーティンのテンプレート<span class="cnt">${2+S.rtpl.length}</span><span class="sp"></span><button class="linkbtn" data-act="addrtpl">＋ 追加</button></h2>
-    <ul class="list">${row('wd',PATN.wd,`枠 ${S.routine.wd.length}個 · 月〜土の標準`,false)}${row('sun',PATN.sun,`枠 ${S.routine.sun.length}個 · 日曜の標準`,false)}
-    ${S.rtpl.map(t=>row(t.id,t.name,`枠 ${t.slots.length}個${used(t.id)?` · ${used(t.id)}日で使用`:''}`,true)).join('')}</ul>
-    <p class="note" style="margin:8px 0 0">「今日」のルーティンの上で、その日だけ使うテンプレートを選べます。枠の編集は、そのテンプレートを表示した状態で時計や一覧から行います。</p></section>`}
+    <ul class="list">${row('wd',PATN.wd,`枠 ${S.routine.wd.length}個 · 月〜土の標準`)}${row('sun',PATN.sun,`枠 ${S.routine.sun.length}個 · 日曜の標準`)}
+    ${S.rtpl.map(t=>row(t.id,t.name,`枠 ${t.slots.length}個${used(t.id)?` · ${used(t.id)}日で使用`:''}`)).join('')}</ul>
+    ${ed?dialCard():'<p class="note" style="margin:8px 0 0">テンプレートを押すと、ここで時計と枠を編集できます。「今日」のルーティンの上で、その日だけ使うテンプレートを選べます。</p>'}</section>`}
 function openRtpl(t,apply){sh=t?{mode:'rtpl',id:t.id,t:t.name}:{mode:'rtpl',id:null,t:'',base:apply?patKey(apply):'',apply};renderSheet()}
 function catSection(){
   const cs=cats(),cnt=k=>S.tasks.filter(t=>t.cat===k).length+S.goals.filter(g=>g.cat===k).length;
@@ -1264,7 +1281,7 @@ function saveSheet(){if(sh&&sh.mode==='gev'){if(!sh.ro&&!sh.busy)gevSave();retur
   if(sh.mode==='rtpl'){if(!text){sheetErr('名前を入力してください。');return}
     if(RESERVED.includes(text)||S.rtpl.some(t=>t.name===text&&t.id!==sh.id)){sheetErr('同じ名前のルーティンがあります。');return}
     if(sh.id){const t=tplOf(sh.id);if(t)t.name=text}
-    else{const id=uid(),src=sh.base&&validKey(sh.base)?plansOf(sh.base):[];S.rtpl.push({id,name:text,slots:src.map(p=>({...p}))});if(sh.apply){S.rday[sh.apply]=id;rsel=null}}
+    else{const id=uid(),src=sh.base&&validKey(sh.base)?plansOf(sh.base):[];S.rtpl.push({id,name:text,slots:src.map(p=>({...p}))});if(sh.apply){S.rday[sh.apply]=id;rsel=null}else if(view==='settings'){tplEdit=id;rsel=null}}
     sh=null;renderSheet();persist();return}
   if(sh.mode==='cat'){if(!text){sheetErr('名前を入力してください。');return}
     const cs=cats().map(c=>({...c}));if(cs.some(c=>c.n===text&&c.k!==sh.id)){sheetErr('同じ名前のカテゴリがあります。');return}
@@ -1275,7 +1292,7 @@ function saveSheet(){if(sh&&sh.mode==='gev'){if(!sh.ro&&!sh.busy)gevSave();retur
     if(sh.s==null||sh.e==null){sheetErr('開始と終了の時刻を入力してください。');return}
     if(sh.s===sh.e){sheetErr('開始と終了が同じです。どちらかをずらしてください。');return}
     const plans=plansOf(sh.pat),o={name:text,s:sh.s,e:sh.e,c:sh.c};
-    if(sh.idx!=null&&plans[sh.idx])plans[sh.idx]=o;else{plans.push(o);if(patKey(sel)===sh.pat)rsel=plans.length-1}
+    if(sh.idx!=null&&plans[sh.idx])plans[sh.idx]=o;else{plans.push(o);if(dialKey()===sh.pat)rsel=plans.length-1}
     sh=null;renderSheet();persist();return}
   if(sh.mode==='task'){const o={id:sh.id||uid(),t:text,cat:sh.cat,exp:!!sh.exp,date:sh.date||null,wk:sh.date?monday(sh.date):sh.wk,goal:sh.goal||null,done:!!sh.done,memo:(sh.memo||'').trim()};
     const i=S.tasks.findIndex(x=>x.id===o.id);i>=0?S.tasks[i]=o:S.tasks.push(o)}
@@ -1292,7 +1309,7 @@ function delSheet(){if(sh.mode==='gev'){if(!sh.busy)gevDel();return}
     Object.values(S.dlogs).forEach(L=>{if(L[k]!=null){L.etc=L.etc?L.etc+'\n'+L[k]:L[k];delete L[k]}});sh=null;renderSheet();persist();return}
   if(sh.mode==='block'){plansOf(sh.pat).splice(sh.idx,1);rsel=null;sh=null;renderSheet();persist();return}
   if(sh.mode==='rtpl'){if(!sh.armed){readSheet();sh.armed=true;renderSheet();return}
-    const k=sh.id;S.rtpl=S.rtpl.filter(t=>t.id!==k);Object.keys(S.rday).forEach(d=>{if(S.rday[d]===k)delete S.rday[d]});rsel=null;sh=null;renderSheet();persist();return}
+    const k=sh.id;if(tplEdit===k)tplEdit=null;S.rtpl=S.rtpl.filter(t=>t.id!==k);Object.keys(S.rday).forEach(d=>{if(S.rday[d]===k)delete S.rday[d]});rsel=null;sh=null;renderSheet();persist();return}
   if(sh.mode==='task')S.tasks=S.tasks.filter(x=>x.id!==sh.id);
   else if(sh.mode==='goal'){S.goals=S.goals.filter(x=>x.id!==sh.id);S.tasks.forEach(t=>{if(t.goal===sh.id)t.goal=null})}
   else S.dls=S.dls.filter(x=>x.id!==sh.id);sh=null;renderSheet();persist()}
@@ -1378,10 +1395,12 @@ document.addEventListener('click',e=>{
     case 'dialfold':dialOpen=!dialOpen;rsel=null;try{localStorage.setItem('planner-dial-open',dialOpen?'1':'0')}catch(_){}render();break;
     case 'copywd':confirmCopy=true;drawDial();break;
     case 'copy-no':confirmCopy=false;drawDial();break;
-    case 'copy-yes':{const a=plansOf(patKey(sel));if(a!==S.routine.wd)a.splice(0,a.length,...S.routine.wd.map(p=>({...p})));confirmCopy=false;rsel=null;persist();break}
+    case 'copy-yes':{const a=plansOf(dialKey());if(a!==S.routine.wd)a.splice(0,a.length,...S.routine.wd.map(p=>({...p})));confirmCopy=false;rsel=null;persist();break}
     case 'rdayreset':setDayTpl(sel,defKey(sel));break;
     case 'addrtpl':openRtpl(null,null);break;
     case 'rtpledit':openRtpl(tplOf(id),null);break;
+    case 'rtplopen':tplEdit=tplEdit===id?null:id;rsel=null;confirmCopy=false;render();{const x=document.getElementById('tpled');if(x)x.scrollIntoView({block:'nearest',behavior:'smooth'})}break;
+    case 'rtplclose':tplEdit=null;rsel=null;confirmCopy=false;render();break;
     case 'addproj':openProj(null);break;
     case 'pedit':openProj(projOf(id));break;
     case 'addmile':openMile(null,id);break;
@@ -1402,7 +1421,7 @@ document.addEventListener('click',e=>{
     case 'catmove':{const cs=cats().map(c=>({...c})),i=cs.findIndex(c=>c.k===el.dataset.k),j=i+n;if(i<0||j<0||j>=cs.length)break;[cs[i],cs[j]]=[cs[j],cs[i]];S.cats=cs;persist();break}
     case 'sh-ccol':readSheet();sh.c=Number(el.dataset.v);sh.armed=false;renderSheet();break;
     case 'sh-col':readSheet();sh.c=el.dataset.v;renderSheet();break;
-    case 'tab':view=el.dataset.v;confirmCarry=confirmClear=confirmCopy=false;rsel=null;if(view==='week')wkSel=monday(sel);if(view==='month'){moSel=sel.slice(0,7);mDay=null}render();window.scrollTo(0,0);break;
+    case 'tab':view=el.dataset.v;tplEdit=null;confirmCarry=confirmClear=confirmCopy=false;rsel=null;if(view==='week')wkSel=monday(sel);if(view==='month'){moSel=sel.slice(0,7);mDay=null}render();window.scrollTo(0,0);break;
     case 'day':sel=n===0?todayKey():addDays(sel,n);rsel=null;confirmCopy=false;render();break;
     case 'wk':wkPage=null;wkDaySel=null;wkSel=n===0?monday(todayKey()):addDays(wkSel,7*n);sel=wkSel<=todayKey()&&todayKey()<=addDays(wkSel,6)?todayKey():wkSel;confirmCarry=false;render();break;
     case 'mo':moSel=n===0?todayKey().slice(0,7):moAdd(moSel,n);mDay=null;render();break;
