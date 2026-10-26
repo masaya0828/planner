@@ -156,6 +156,18 @@ ul.list>li:first-child{border-top:0}
 .plog{font:inherit;color:var(--ink);text-align:left;background:var(--surface);border:0;border-top:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:4px;cursor:pointer}
 .plog:first-child{border-top:0}
 .plog .pld{font-family:var(--f-num);font-size:12px;color:var(--muted)}
+.pltasks{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted)}
+.pltasks span{display:flex;align-items:flex-start;gap:6px}
+.pltasks svg{width:13px;height:13px;flex:none;margin-top:3px;stroke:var(--accent)}
+.plog.ponly{cursor:default}
+.plauto{margin-left:8px;font-family:var(--f-body,inherit);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.pmemo{font:inherit;text-align:left;cursor:pointer;color:var(--ink);background:color-mix(in srgb,var(--pc) 7%,var(--surface));border:1px solid var(--line);border-left:3px solid var(--pc);border-radius:8px;padding:8px 10px;margin:0;font-size:13.5px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.pref{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--pc);border:1px solid color-mix(in srgb,var(--pc) 45%,transparent);border-radius:999px;padding:2px 7px 2px 5px;line-height:1.2}
+.pref svg{width:11px;height:11px}
+.toast{position:fixed;z-index:8;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--accent);border-radius:var(--r);padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.toast .tmsg{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.toast .tbtns{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.toast .tbtns .linkbtn{margin-left:auto}
 .plog .pltx{font-size:13.5px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}
 .pmore{font:inherit;background:none;border:0;color:var(--accent);font-size:13px;padding:6px 0;cursor:pointer;text-align:left}
 details.pdone summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}
@@ -363,6 +375,7 @@ ul.list.rlist>li:focus-within{outline:2px solid var(--accent);outline-offset:-2p
   .c-week{grid-template-columns:minmax(0,1fr) 340px}
   .c-week .col>*{order:0}
   .wdbar{bottom:16px}
+  .toast{left:auto;right:32px;bottom:32px;width:420px}
   .c-month,.c-set{grid-template-columns:repeat(2,minmax(0,1fr))}
   .plist{grid-template-columns:repeat(auto-fill,minmax(400px,1fr));align-items:start}
   .days{gap:0;border-bottom:1px solid var(--line)}
@@ -390,6 +403,7 @@ ul.list.rlist>li:focus-within{outline:2px solid var(--accent);outline-offset:-2p
   <main id="main"><div class="empty">保存したデータを読み込んでいます…</div></main>
 </div>
 <button class="fab" id="fab" aria-label="追加" data-act="fab">＋</button>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <nav class="tabs" aria-label="表示切り替え"><div class="in" id="tabs"></div></nav>
 <div id="sheetRoot" hidden></div>
 
@@ -423,7 +437,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const RESI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='28';
+const APP_VERSION='29';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -447,11 +461,14 @@ function norm(o){const b=blank();if(!o||typeof o!=='object')return b;
     .map(t=>({id:id(t.id),name:String(t.name).trim(),slots:slots(t.slots)}))}
   if(o.rday&&typeof o.rday==='object'){const ok=new Set(['wd','sun',...b.rtpl.map(t=>t.id)]);Object.keys(o.rday).forEach(d=>{if(isDay(d)&&ok.has(o.rday[d]))b.rday[d]=o.rday[d]})}
   if(Array.isArray(o.tasks))b.tasks=o.tasks.filter(t=>t&&t.t).map(t=>{const date=isDay(t.date)?t.date:null;
-    return{id:id(t.id),t:String(t.t),cat:ck.has(t.cat)?t.cat:'etc',exp:!!t.exp,date,wk:date?monday(date):(isDay(t.wk)?monday(t.wk):monday(todayKey())),goal:t.goal||null,done:!!t.done,memo:String(t.memo||'')}});
+    return{id:id(t.id),t:String(t.t),cat:ck.has(t.cat)?t.cat:'etc',exp:!!t.exp,date,wk:date?monday(date):(isDay(t.wk)?monday(t.wk):monday(todayKey())),goal:t.goal||null,done:!!t.done,memo:String(t.memo||''),
+      pid:String(t.pid||''),mid:String(t.mid||''),dd:t.done&&isDay(t.dd)?t.dd:''}});
   if(Array.isArray(o.goals))b.goals=o.goals.filter(g=>g&&g.t&&isMo(g.mo)).map(g=>({id:id(g.id),t:String(g.t),cat:ck.has(g.cat)?g.cat:'etc',mo:g.mo,done:!!g.done,memo:String(g.memo||'')}));
-  if(Array.isArray(o.projects))b.projects=o.projects.filter(p=>p&&p.t).map(p=>({id:id(p.id),t:String(p.t),goal:String(p.goal||''),status:['active','hold','done'].includes(p.status)?p.status:'active',c:Number.isInteger(p.c)&&p.c>=0&&p.c<8?p.c:0}));
+  if(Array.isArray(o.projects))b.projects=o.projects.filter(p=>p&&p.t).map(p=>({id:id(p.id),t:String(p.t),goal:String(p.goal||''),status:['active','hold','done'].includes(p.status)?p.status:'active',c:Number.isInteger(p.c)&&p.c>=0&&p.c<8?p.c:0,memo:String(p.memo||'')}));
   {const pids=new Set(b.projects.map(p=>p.id));
   if(Array.isArray(o.miles))b.miles=o.miles.filter(m=>m&&m.t&&pids.has(m.pid)).map(m=>({id:id(m.id),pid:m.pid,t:String(m.t),due:isDay(m.due)?m.due:'',status:['todo','doing','done'].includes(m.status)?m.status:'todo',cd:!!m.cd,memo:String(m.memo||'')}));
+  // a task's research theme / milestone must still exist
+  b.tasks.forEach(t=>{if(!pids.has(t.pid)){t.pid='';t.mid=''}else if(t.mid&&!b.miles.some(m=>m.id===t.mid&&m.pid===t.pid))t.mid=''});
   if(Array.isArray(o.plogs))b.plogs=o.plogs.filter(l=>l&&pids.has(l.pid)&&isDay(l.date)).map(l=>({id:id(l.id),pid:l.pid,date:l.date,text:logText(l)})).filter(l=>l.text.trim());}
   if(Array.isArray(o.events))b.events=o.events.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,t:String(e.t),memo:String(e.memo||'')}));
   if(Array.isArray(o.mevents))b.mevents=o.mevents.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,end:isDay(e.end)&&e.end>e.date?e.end:'',t:String(e.t),memo:String(e.memo||''),cd:!!e.cd}));
@@ -619,7 +636,7 @@ function taskRow(t,opts={}){
     <button class="check" data-act="toggle" data-id="${t.id}" aria-label="${t.done?'未完了に戻す':'完了にする'}" aria-pressed="${!!t.done}">${CHECK}</button>
     <button class="tbody" data-act="edit" data-id="${t.id}">
       <span class="ttext">${esc(t.t)}</span>
-      <span class="meta">${t.exp?'<span class="tag-exp">実験</span>':''}${chip(t.cat)}${g?`<span class="goal-ref">→ ${esc(g.t)}</span>`:''}</span>${t.memo?`<span class="tmemo">${esc(t.memo)}</span>`:''}
+      <span class="meta">${t.exp?'<span class="tag-exp">実験</span>':''}${chip(t.cat)}${t.pid&&!opts.noTheme&&projOf(t.pid)?`<span class="pref" style="--pc:var(--cat${projOf(t.pid).c})">${RESI}${esc(projOf(t.pid).t)}</span>`:''}${g?`<span class="goal-ref">→ ${esc(g.t)}</span>`:''}</span>${t.memo?`<span class="tmemo">${esc(t.memo)}</span>`:''}
     </button>
     ${opts.pull?`<button class="side-btn" data-act="totoday" data-id="${t.id}">今日やる</button>`:''}
   </li>`;
@@ -1061,10 +1078,12 @@ function render(){
   document.getElementById('tabs').innerHTML=[['today','今日',d.getDate()],['week','週','W'+isoWeek(t)],['month','月',(d.getMonth()+1)+'月'],['research','研究',RESI],['settings','設定',GEAR]]
     .map(([k,n,b])=>`<button data-act="tab" data-v="${k}" ${view===k?'aria-current="page"':''}>${k==='settings'||k==='research'?b:`<b>${b}</b>`}${n}</button>`).join('');
   document.getElementById('fab').hidden=!!sh||view==='settings'||(view==='week'&&!!wkDraft);
+  drawToast();
 }
 document.addEventListener('change',e=>{
   if(e.target.matches&&e.target.matches('input[data-calid]')){const ids=[...document.querySelectorAll('input[data-calid]')].filter(x=>x.checked).map(x=>x.dataset.calid);
     S.calSel={...S.calSel,ids:ids.length?ids:null};calReset();persist(false);return}
+  if(e.target.id==='f-tpid'&&sh&&sh.mode==='task'){readSheet();sh.mid='';if(sh.pid){const rk=resCatKey();if(rk)sh.cat=rk}renderSheet();return}
   if(e.target.id==='f-defcal'){S.calSel={...S.calSel,def:e.target.value};persist(false);return}
   if(e.target.id==='f-rday'){const v=e.target.value;if(v==='__new'){e.target.value=patKey(sel);openRtpl(null,sel)}else if(validKey(v))setDayTpl(sel,v);return}
   if(e.target.id!=='f-imfile'||!e.target.files[0])return;const f=e.target.files[0];
@@ -1078,12 +1097,13 @@ function openDl(d){const t=todayKey();sh=d?{mode:'dl',...JSON.parse(JSON.stringi
 function readSheet(){if(!sh)return;const v=id=>{const e=document.getElementById(id);return e?e.value:undefined};
   if(v('f-text')!==undefined)sh.t=v('f-text');
   if(['task','goal','ev','mev','mile'].includes(sh.mode)){const mv=v('f-memo');if(mv!==undefined)sh.memo=mv}
-  if(sh.mode==='proj'){const g=v('f-memo');if(g!==undefined)sh.goal=g}
+  if(sh.mode==='proj'){const g=v('f-memo');if(g!==undefined)sh.goal=g;const pm=v('f-pmemo');if(pm!==undefined)sh.memo=pm}
   if(sh.mode==='mile'){const d=v('f-mdue');if(d!==undefined)sh.due=d}
   if(sh.mode==='plog'){const p=v('f-lpid');if(p!==undefined)sh.pid=p;const d=v('f-ldate');if(d!==undefined)sh.date=d;const x=v('f-ltext');if(x!==undefined)sh.text=x}
   if(sh.mode==='jot'){const jv=v('f-jtext');if(jv!==undefined)sh.t=jv}
   if(sh.mode==='ev'||sh.mode==='mev'){const dv=v('f-evdate');if(dv!==undefined)sh.date=dv;const de=v('f-evend');if(de!==undefined)sh.end=de||''}
-  if(sh.mode==='task'){const dv=v('f-date');if(dv!==undefined)sh.date=dv||null;const gv=v('f-goal');if(gv!==undefined)sh.goal=gv||null}
+  if(sh.mode==='task'){const dv=v('f-date');if(dv!==undefined)sh.date=dv||null;const gv=v('f-goal');if(gv!==undefined)sh.goal=gv||null;
+    const pv=v('f-tpid');if(pv!==undefined)sh.pid=pv;const mv2=v('f-tmid');if(mv2!==undefined)sh.mid=sh.pid?mv2:''}
   if(sh.mode==='dl'){const dd=v('f-dldate');if(dd!==undefined)sh.date=dd}
   if(sh.mode==='rtpl'){const b=v('f-rbase');if(b!==undefined)sh.base=b}
   if(sh.mode==='block'){const a=v('f-bs'),b=v('f-be');if(a!==undefined)sh.s=toMin(a);if(b!==undefined)sh.e=toMin(b)}}
@@ -1172,26 +1192,46 @@ function logText(l){if(typeof l.text==='string'&&l.text.trim())return l.text;
   if(parts.length===1&&parts[0][0]==='did')return String(l.did).trim();
   return parts.map(([k,n])=>`${n}：${String(l[k]).trim()}`).join('\n')}
 const logOpen=new Set();
-const projOf=id=>S.projects.find(p=>p.id===id);
+const projOf=id=>id?S.projects.find(p=>p.id===id):null;
+const resCatKey=()=>{const cs=cats();const c=cs.find(c=>c.k==='res')||cs.find(c=>/研究/.test(c.n));return c?c.k:''};
+// After checking off a task that belongs to a research theme: offer to log it, and to close the milestone when its tasks are all done.
+let doneNote=null;
+function drawToast(){const el=document.getElementById('toast');if(!el)return;
+  const t=doneNote&&S.tasks.find(x=>x.id===doneNote.tid),p=t&&t.done&&projOf(t.pid);
+  if(!p){doneNote=null;el.hidden=true;el.innerHTML='';document.getElementById('fab').hidden=!!sh||view==='settings'||(view==='week'&&!!wkDraft);return}
+  const m=t.mid&&S.miles.find(x=>x.id===t.mid),mt=m?S.tasks.filter(x=>x.mid===m.id):[],all=!!m&&m.status!=='done'&&mt.length>0&&mt.every(x=>x.done);
+  el.innerHTML=`<div class="tmsg"><b>「${esc(short(t.t,18))}」を完了しました</b><span class="note">${esc(p.t)}${m?` · ${esc(m.t)}`:''}</span>${all?`<span class="note ok">このマイルストーンのタスクがすべて終わりました。</span>`:''}</div>
+    <div class="tbtns"><button class="btn ghost" data-act="dn-log">進捗ログに書く</button>${all?'<button class="btn ghost" data-act="dn-mile">マイルストーンを完了に</button>':''}<button class="linkbtn" data-act="dn-close" aria-label="閉じる">閉じる</button></div>`;
+  el.hidden=false;document.getElementById('fab').hidden=true}
 function mileRow(m){const t=todayKey(),n=m.due?dayDiff(t,m.due):null;
   const due=m.due?`${md(m.due)}<br>${m.status==='done'?'':n<0?`<span>${-n}日超過</span>`:n===0?'今日':`あと${n}日`}`:'';
   return `<li class="${m.status==='done'?'done':''}"><button class="mstat ${m.status}" data-act="mstat" data-id="${m.id}" aria-label="状態を切り替える（今：${MSTAT[m.status]}）">${MSTAT[m.status]}</button>
-    <button class="tbody" data-act="medit" data-id="${m.id}"><span class="ttext">${esc(m.t)}</span>${m.cd&&m.status!=='done'?'<span class="meta">今日の画面でカウントダウン中</span>':''}${m.memo?`<span class="tmemo">${esc(m.memo)}</span>`:''}</button>
+    <button class="tbody" data-act="medit" data-id="${m.id}"><span class="ttext">${esc(m.t)}</span>${(()=>{const ts=S.tasks.filter(t=>t.mid===m.id);return ts.length?`<span class="meta">タスク ${ts.filter(t=>t.done).length}/${ts.length}</span>`:''})()}${m.cd&&m.status!=='done'?'<span class="meta">今日の画面でカウントダウン中</span>':''}${m.memo?`<span class="tmemo">${esc(m.memo)}</span>`:''}</button>
     ${due?`<span class="mdue ${m.status!=='done'&&n!=null&&n<=7?'soon':''}">${due}</span>`:''}</li>`}
-function logItem(l){return `<button class="plog" data-act="ledit" data-id="${l.id}"><span class="pld">${md(l.date)}（${wdOf(l.date)}）</span><span class="pltx">${esc(l.text)}</span></button>`}
+const taskLines=ts=>ts.length?`<span class="pltasks">${ts.map(t=>`<span>${CHECK}${esc(t.t)}</span>`).join('')}</span>`:'';
+function logItem(l,ts=[]){return `<button class="plog" data-act="ledit" data-id="${l.id}"><span class="pld">${md(l.date)}（${wdOf(l.date)}）</span>${taskLines(ts)}<span class="pltx">${esc(l.text)}</span></button>`}
+function taskOnlyItem(d,ts){return `<div class="plog ponly"><span class="pld">${md(d)}（${wdOf(d)}）<span class="plauto">完了したタスク</span></span>${taskLines(ts)}</div>`}
 function projCard(p){
   const ms=S.miles.filter(m=>m.pid===p.id).sort((a,b)=>(a.status==='done')-(b.status==='done')||(a.due||'9999').localeCompare(b.due||'9999'));
   const dn=ms.filter(m=>m.status==='done').length,pct=ms.length?Math.round(dn/ms.length*100):0;
-  const ls=S.plogs.filter(l=>l.pid===p.id).sort((a,b)=>b.date.localeCompare(a.date)),open=logOpen.has(p.id),shown=open?ls:ls.slice(0,2);
+  const ls=S.plogs.filter(l=>l.pid===p.id),open=logOpen.has(p.id);
+  // progress log: written entries plus the theme's completed tasks, grouped by day (newest first)
+  const dOf=t=>t.dd||t.date||'',dt=S.tasks.filter(t=>t.pid===p.id&&t.done&&dOf(t));
+  const days=[...new Set([...ls.map(l=>l.date),...dt.map(dOf)])].sort().reverse(),shownD=open?days:days.slice(0,2);
+  const logHTML=shownD.map(d=>{const L=ls.filter(l=>l.date===d),T=dt.filter(t=>dOf(t)===d);return L.length?L.map((l,k)=>logItem(l,k?[]:T)).join(''):taskOnlyItem(d,T)}).join('');
+  const ot=S.tasks.filter(t=>t.pid===p.id&&!t.done).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
   return `<section class="pcard ${p.status}" style="--pc:var(--cat${p.c})">
     <div class="phd"><span class="pdot"></span><button class="ptitle" data-act="pedit" data-id="${p.id}">${esc(p.t)}</button><span class="pstat">${PSTAT[p.status]}</span></div>
     ${p.goal?`<p class="pgoal">${esc(p.goal)}</p>`:''}
+    ${p.memo?`<button class="pmemo" data-act="pedit" data-id="${p.id}" title="押すと編集">${esc(p.memo)}</button>`:''}
     ${ms.length?`<div class="pprog"><div class="bar"><i style="width:${pct}%"></i></div><span class="mono">${dn}/${ms.length} 完了</span></div>`:''}
     <div class="psub">マイルストーン<span class="sp"></span><button class="linkbtn" data-act="addmile" data-id="${p.id}">＋ 追加</button></div>
     ${ms.length?`<ul class="list mlist">${ms.map(mileRow).join('')}</ul>`:'<div class="mini-empty">条件検討、データ取得、学会発表など、このテーマの節目を目標日付きで入れておけます。</div>'}
-    <div class="psub">進捗ログ<span class="cnt">${ls.length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addlog" data-id="${p.id}">＋ 記録する</button></div>
-    ${ls.length?`<div class="plogs">${shown.map(logItem).join('')}</div>${ls.length>2?`<button class="pmore" data-act="logmore" data-id="${p.id}">${open?'最新の2件だけ表示':`すべて表示（${ls.length}件）`}</button>`:''}`
-      :'<div class="mini-empty">やったこと、結果、次にやることを、日付ごとに短く書きためておけます。</div>'}
+    <div class="psub">タスク<span class="cnt">${ot.length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addptask" data-id="${p.id}">＋ タスク</button></div>
+    ${ot.length?list(ot,{noTheme:true}):'<div class="mini-empty">このテーマのタスクを作ると、ここに並びます。完了すると下の進捗ログに入ります。</div>'}
+    <div class="psub">進捗ログ<span class="cnt">${days.length||''}</span><span class="sp"></span><button class="linkbtn" data-act="addlog" data-id="${p.id}">＋ 記録する</button></div>
+    ${days.length?`<div class="plogs">${logHTML}</div>${days.length>2?`<button class="pmore" data-act="logmore" data-id="${p.id}">${open?'最新の2日だけ表示':`すべて表示（${days.length}日）`}</button>`:''}`
+      :'<div class="mini-empty">やったこと、結果、次にやることを、日付ごとに書きためておけます。このテーマのタスクを完了すると、ここにも並びます。</div>'}
   </section>`}
 function renderResearch(){
   setHead('研究','研究の進捗','');
@@ -1278,6 +1318,8 @@ function renderSheet(){
       <select id="f-date"><option value="">日付未定（この週のうちに）</option>${days.map(k=>`<option value="${k}" ${sh.date===k?'selected':''}>${md(k)}（${wdOf(k)}）</option>`).join('')}</select>
       <button type="button" data-act="sh-wk" data-n="1" aria-label="次の週">›</button></div></div>
     <div class="field"><label for="f-goal">つながる月の目標</label><select id="f-goal"><option value="">なし</option>${goals.map(g=>`<option value="${g.id}" ${sh.goal===g.id?'selected':''}>${esc(g.t)}</option>`).join('')}</select>${goals.length?'':'<span class="note">「月」タブで目標を作るとここで選べます</span>'}</div>
+    ${S.projects.length?`<div class="timerow"><div class="field"><label for="f-tpid">研究テーマ</label><select id="f-tpid"><option value="">なし</option>${S.projects.filter(p=>p.status!=='done'||p.id===sh.pid).map(p=>`<option value="${p.id}" ${p.id===sh.pid?'selected':''}>${esc(p.t)}</option>`).join('')}</select></div>
+      <div class="field"><label for="f-tmid">マイルストーン</label><select id="f-tmid" ${sh.pid?'':'disabled'}><option value="">なし</option>${S.miles.filter(m=>m.pid===sh.pid&&(m.status!=='done'||m.id===sh.mid)).map(m=>`<option value="${m.id}" ${m.id===sh.mid?'selected':''}>${esc(m.t)}</option>`).join('')}</select></div></div>`:''}
     <div class="field"><label for="f-memo">メモ（備考）</label><textarea id="f-memo" style="min-height:80px" placeholder="実験の条件、参考にする論文、気づいたことなど">${esc(sh.memo||'')}</textarea></div>`;
   }else if(sh.mode==='goal'){
     const[y,m]=sh.mo.split('-').map(Number);
@@ -1305,6 +1347,7 @@ function renderSheet(){
     body=`<h3>${editing?'テーマを編集':'テーマを追加'}</h3>
     <div class="field"><label for="f-text">テーマ名</label><input type="text" id="f-text" value="${esc(sh.t)}" maxlength="40" placeholder="例：腎臓PIの性差" enterkeyhint="done"></div>
     <div class="field"><label for="f-memo">目的（1〜2行）</label><textarea id="f-memo" style="min-height:70px" placeholder="例：近位尿細管のPI分子種の性差と、その意味を明らかにする">${esc(sh.goal||'')}</textarea></div>
+    <div class="field"><label for="f-pmemo">メモ</label><textarea id="f-pmemo" style="min-height:120px" placeholder="関連する論文、実験条件、アイデア、相談したいことなど">${esc(sh.memo||'')}</textarea></div>
     <div class="field"><span class="lbl">状態</span><div class="seg">${Object.keys(PSTAT).map(k=>`<button type="button" data-act="sh-pstat" data-v="${k}" aria-pressed="${sh.status===k}">${PSTAT[k]}</button>`).join('')}</div></div>
     <div class="field"><span class="lbl">色</span><div class="swatches" role="radiogroup" aria-label="色">${CCOLN.map((nm2,i)=>`<button type="button" class="sw" role="radio" aria-checked="${sh.c===i}" aria-label="${nm2}" style="background:var(--cat${i})" data-act="sh-ccol" data-v="${i}"></button>`).join('')}</div></div>
     ${sh.armed?`<p class="note warnline" style="margin:0">このテーマと、マイルストーン${nm}件・進捗ログ${nl}件を削除します。もう一度「削除」を押すと確定します。</p>`:''}`;
@@ -1314,12 +1357,13 @@ function renderSheet(){
     <div class="field"><label for="f-mdue">目標日</label><input type="date" id="f-mdue" value="${esc(sh.due||'')}"></div>
     <div class="field"><span class="lbl">状態</span><div class="seg">${Object.keys(MSTAT).map(k=>`<button type="button" data-act="sh-mstat" data-v="${k}" aria-pressed="${sh.status===k}">${MSTAT[k]}</button>`).join('')}</div></div>
     <div class="field"><span class="lbl">「今日」の画面でカウントダウン（目標日があるとき）</span><div class="seg"><button type="button" data-act="sh-cd" data-v="1" aria-pressed="${!!sh.cd}">表示する</button><button type="button" data-act="sh-cd" data-v="0" aria-pressed="${!sh.cd}">表示しない</button></div></div>
-    <div class="field"><label for="f-memo">メモ</label><textarea id="f-memo" style="min-height:70px" placeholder="達成の基準、必要なサンプルなど">${esc(sh.memo||'')}</textarea></div>`;
+    <div class="field"><label for="f-memo">メモ</label><textarea id="f-memo" style="min-height:70px" placeholder="達成の基準、必要なサンプルなど">${esc(sh.memo||'')}</textarea></div>${editing?`<div><button type="button" class="linkbtn" data-act="addptask" data-id="${esc(sh.pid)}" data-mid="${esc(sh.id)}">＋ このマイルストーンのタスクを追加</button></div>`:''}`;
   }else if(sh.mode==='plog'){
     body=`<h3>${editing?'進捗ログを編集':'進捗を記録'}</h3>
     <div class="timerow"><div class="field"><label for="f-lpid">テーマ</label><select id="f-lpid">${S.projects.map(p=>`<option value="${p.id}" ${p.id===sh.pid?'selected':''}>${esc(p.t)}</option>`).join('')}</select></div>
       <div class="field"><label for="f-ldate">日付</label><input type="date" id="f-ldate" value="${esc(sh.date||'')}"></div></div>
-    <div class="field"><label for="f-ltext">内容</label><textarea id="f-ltext" style="min-height:200px;line-height:1.6" placeholder="例：MALDI-MSIで雄雌の腎切片を測定。PI 38:4 が雄の皮質で高い傾向。次回はn数を増やして再測定する">${esc(sh.text||'')}</textarea></div>`;
+    <div class="field"><label for="f-ltext">内容</label>${sh.hint?`<p class="note" style="margin:0">完了したタスク「${esc(sh.hint)}」は、進捗ログに自動で並びます。結果や気づいたことを書き足してください。</p>`:''}
+      <textarea id="f-ltext" style="min-height:200px;line-height:1.6" placeholder="${sh.hint?`例：${esc(sh.hint)}の結果、うまくいった点・いかなかった点、次にやること`:'例：MALDI-MSIで雄雌の腎切片を測定。PI 38:4 が雄の皮質で高い傾向。次回はn数を増やして再測定する'}">${esc(sh.text||'')}</textarea></div>`;
   }else if(sh.mode==='ev'||sh.mode==='mev'){const isM=sh.mode==='mev';
     body=`<h3>${isM?(editing?'イベントを編集':'イベントを追加'):(editing?'予定を編集':'予定を追加')}</h3>
     <div class="field"><label for="f-text">内容</label><input type="text" id="f-text" value="${esc(sh.t)}" placeholder="例：学会（大阪）" enterkeyhint="done"></div>
@@ -1363,7 +1407,7 @@ function renderSheet(){
 function sheetErr(msg){const e=document.getElementById('sh-err');if(e){e.textContent=msg;e.hidden=false}}
 function saveSheet(){if(sh&&sh.mode==='gev'){if(!sh.ro&&!sh.busy)gevSave();return}readSheet();const text=(sh.t||'').trim();
   if(sh.mode==='proj'){if(!text){sheetErr('テーマ名を入力してください。');return}
-    const o={id:sh.id||uid(),t:text,goal:(sh.goal||'').trim(),status:sh.status,c:sh.c},i=S.projects.findIndex(x=>x.id===o.id);i>=0?S.projects[i]=o:S.projects.push(o);
+    const o={id:sh.id||uid(),t:text,goal:(sh.goal||'').trim(),status:sh.status,c:sh.c,memo:(sh.memo||'').trim()},i=S.projects.findIndex(x=>x.id===o.id);i>=0?S.projects[i]=o:S.projects.push(o);
     sh=null;renderSheet();persist();return}
   if(sh.mode==='mile'){if(!text){sheetErr('内容を入力してください。');return}
     const o={id:sh.id||uid(),pid:sh.pid,t:text,due:isDayK(sh.due)?sh.due:'',status:sh.status,cd:!!sh.cd,memo:(sh.memo||'').trim()},i=S.miles.findIndex(x=>x.id===o.id);i>=0?S.miles[i]=o:S.miles.push(o);
@@ -1394,14 +1438,16 @@ function saveSheet(){if(sh&&sh.mode==='gev'){if(!sh.ro&&!sh.busy)gevSave();retur
     const plans=plansOf(sh.pat),o={name:text,s:sh.s,e:sh.e,c:sh.c};
     if(sh.idx!=null&&plans[sh.idx])plans[sh.idx]=o;else{plans.push(o);if(dialKey()===sh.pat)rsel=plans.length-1}
     sh=null;renderSheet();persist();return}
-  if(sh.mode==='task'){const o={id:sh.id||uid(),t:text,cat:sh.cat,exp:!!sh.exp,date:sh.date||null,wk:sh.date?monday(sh.date):sh.wk,goal:sh.goal||null,done:!!sh.done,memo:(sh.memo||'').trim()};
+  if(sh.mode==='task'){const pid=projOf(sh.pid)?sh.pid:'',mid=pid&&S.miles.some(m=>m.id===sh.mid&&m.pid===pid)?sh.mid:'';
+    const o={id:sh.id||uid(),t:text,cat:sh.cat,exp:!!sh.exp,date:sh.date||null,wk:sh.date?monday(sh.date):sh.wk,goal:sh.goal||null,done:!!sh.done,memo:(sh.memo||'').trim(),pid,mid,dd:sh.done?(sh.dd||todayKey()):''};
     const i=S.tasks.findIndex(x=>x.id===o.id);i>=0?S.tasks[i]=o:S.tasks.push(o)}
   else if(sh.mode==='goal'){const o={id:sh.id||uid(),t:text,cat:sh.cat,mo:sh.mo,done:!!sh.done,memo:(sh.memo||'').trim()};const i=S.goals.findIndex(x=>x.id===o.id);i>=0?S.goals[i]=o:S.goals.push(o)}
   else{if(!sh.date)return;const o={id:sh.id||uid(),t:text,date:sh.date};const i=S.dls.findIndex(x=>x.id===o.id);i>=0?S.dls[i]=o:S.dls.push(o)}
   sh=null;renderSheet();persist();}
 function delSheet(){if(sh.mode==='gev'){if(!sh.busy)gevDel();return}
   if(sh.mode==='proj'){if(!sh.armed){readSheet();sh.armed=true;renderSheet();return}
-    const k=sh.id;S.projects=S.projects.filter(x=>x.id!==k);S.miles=S.miles.filter(x=>x.pid!==k);S.plogs=S.plogs.filter(x=>x.pid!==k);sh=null;renderSheet();persist();return}
+    const k=sh.id;S.tasks.forEach(t=>{if(t.pid===k){t.pid='';t.mid=''}});S.projects=S.projects.filter(x=>x.id!==k);S.miles=S.miles.filter(x=>x.pid!==k);S.plogs=S.plogs.filter(x=>x.pid!==k);sh=null;renderSheet();persist();return}
+  if(sh.mode==='mile')S.tasks.forEach(t=>{if(t.mid===sh.id)t.mid=''});
   if(sh.mode==='mile'||sh.mode==='plog'){const f=sh.mode==='mile'?'miles':'plogs';S[f]=S[f].filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
   if(sh.mode==='ev'||sh.mode==='mev'){const f=sh.mode==='mev'?'mevents':'events';S[f]=S[f].filter(x=>x.id!==sh.id);sh=null;renderSheet();persist();return}
   if(sh.mode==='cat'){if(!sh.armed){readSheet();sh.armed=true;renderSheet();return}
@@ -1524,11 +1570,17 @@ document.addEventListener('click',e=>{
     case 'catmove':{const cs=cats().map(c=>({...c})),i=cs.findIndex(c=>c.k===el.dataset.k),j=i+n;if(i<0||j<0||j>=cs.length)break;[cs[i],cs[j]]=[cs[j],cs[i]];S.cats=cs;persist();break}
     case 'sh-ccol':readSheet();sh.c=Number(el.dataset.v);sh.armed=false;renderSheet();break;
     case 'sh-col':readSheet();sh.c=el.dataset.v;renderSheet();break;
-    case 'tab':view=el.dataset.v;tplEdit=null;wkDraft=null;confirmCarry=confirmClear=confirmCopy=false;rsel=null;if(view==='week')wkSel=monday(sel);if(view==='month'){moSel=sel.slice(0,7);mDay=null}render();window.scrollTo(0,0);break;
+    case 'tab':view=el.dataset.v;tplEdit=null;wkDraft=null;doneNote=null;confirmCarry=confirmClear=confirmCopy=false;rsel=null;if(view==='week')wkSel=monday(sel);if(view==='month'){moSel=sel.slice(0,7);mDay=null}render();window.scrollTo(0,0);break;
     case 'day':sel=n===0?todayKey():addDays(sel,n);rsel=null;confirmCopy=false;render();break;
     case 'wk':wkPage=null;wkDaySel=null;wkDraft=null;wkSel=n===0?monday(todayKey()):addDays(wkSel,7*n);sel=wkSel<=todayKey()&&todayKey()<=addDays(wkSel,6)?todayKey():wkSel;confirmCarry=false;render();break;
     case 'mo':moSel=n===0?todayKey().slice(0,7):moAdd(moSel,n);mDay=null;render();break;
-    case 'toggle':{const t=S.tasks.find(x=>x.id===id);if(t){t.done=!t.done;persist()}break}
+    case 'toggle':{const t=S.tasks.find(x=>x.id===id);if(t){t.done=!t.done;t.dd=t.done?todayKey():'';
+      if(t.done&&t.pid&&projOf(t.pid))doneNote={tid:t.id};else if(doneNote&&doneNote.tid===t.id)doneNote=null;persist()}break}
+    case 'dn-close':doneNote=null;drawToast();break;
+    case 'dn-log':{const t=doneNote&&S.tasks.find(x=>x.id===doneNote.tid);doneNote=null;drawToast();if(t){openLog(null,t.pid);sh.date=t.dd||todayKey();sh.hint=t.t;renderSheet();
+      const ta=document.getElementById('f-ltext');if(ta)ta.focus()}break}
+    case 'dn-mile':{const t=doneNote&&S.tasks.find(x=>x.id===doneNote.tid),m=t&&S.miles.find(x=>x.id===t.mid);if(m)m.status='done';doneNote=null;persist();break}
+    case 'addptask':openTask(null,{date:null,wk:monday(todayKey()),pid:id,mid:el.dataset.mid||'',cat:resCatKey()||cats()[0].k});break;
     case 'gtoggle':{const g=S.goals.find(x=>x.id===id);if(g){g.done=!g.done;persist()}break}
     case 'totoday':{const t=S.tasks.find(x=>x.id===id);if(t){t.date=sel;t.wk=monday(sel);persist()}break}
     case 'edit':openTask(S.tasks.find(x=>x.id===id));break;
