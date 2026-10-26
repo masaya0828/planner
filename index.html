@@ -156,9 +156,7 @@ ul.list>li:first-child{border-top:0}
 .plog{font:inherit;color:var(--ink);text-align:left;background:var(--surface);border:0;border-top:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:4px;cursor:pointer}
 .plog:first-child{border-top:0}
 .plog .pld{font-family:var(--f-num);font-size:12px;color:var(--muted)}
-.plog dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 10px;font-size:13.5px}
-.plog dt{color:var(--muted);font-size:12px;padding-top:1px}
-.plog dd{margin:0;white-space:pre-line;overflow-wrap:anywhere}
+.plog .pltx{font-size:13.5px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}
 .pmore{font:inherit;background:none;border:0;color:var(--accent);font-size:13px;padding:6px 0;cursor:pointer;text-align:left}
 details.pdone summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}
 details.pdone .plist{margin-top:12px}
@@ -425,7 +423,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const RESI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='27';
+const APP_VERSION='28';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -454,7 +452,7 @@ function norm(o){const b=blank();if(!o||typeof o!=='object')return b;
   if(Array.isArray(o.projects))b.projects=o.projects.filter(p=>p&&p.t).map(p=>({id:id(p.id),t:String(p.t),goal:String(p.goal||''),status:['active','hold','done'].includes(p.status)?p.status:'active',c:Number.isInteger(p.c)&&p.c>=0&&p.c<8?p.c:0}));
   {const pids=new Set(b.projects.map(p=>p.id));
   if(Array.isArray(o.miles))b.miles=o.miles.filter(m=>m&&m.t&&pids.has(m.pid)).map(m=>({id:id(m.id),pid:m.pid,t:String(m.t),due:isDay(m.due)?m.due:'',status:['todo','doing','done'].includes(m.status)?m.status:'todo',cd:!!m.cd,memo:String(m.memo||'')}));
-  if(Array.isArray(o.plogs))b.plogs=o.plogs.filter(l=>l&&pids.has(l.pid)&&isDay(l.date)).map(l=>({id:id(l.id),pid:l.pid,date:l.date,did:String(l.did||''),res:String(l.res||''),next:String(l.next||''),issue:String(l.issue||'')})).filter(l=>l.did||l.res||l.next||l.issue);}
+  if(Array.isArray(o.plogs))b.plogs=o.plogs.filter(l=>l&&pids.has(l.pid)&&isDay(l.date)).map(l=>({id:id(l.id),pid:l.pid,date:l.date,text:logText(l)})).filter(l=>l.text.trim());}
   if(Array.isArray(o.events))b.events=o.events.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,t:String(e.t),memo:String(e.memo||'')}));
   if(Array.isArray(o.mevents))b.mevents=o.mevents.filter(e=>e&&e.t&&isDay(e.date)).map(e=>({id:id(e.id),date:e.date,end:isDay(e.end)&&e.end>e.date?e.end:'',t:String(e.t),memo:String(e.memo||''),cd:!!e.cd}));
   if(o.calSel&&typeof o.calSel==='object')b.calSel={ids:Array.isArray(o.calSel.ids)&&o.calSel.ids.length?o.calSel.ids.map(String):null,def:String(o.calSel.def||'')};
@@ -1082,7 +1080,7 @@ function readSheet(){if(!sh)return;const v=id=>{const e=document.getElementById(
   if(['task','goal','ev','mev','mile'].includes(sh.mode)){const mv=v('f-memo');if(mv!==undefined)sh.memo=mv}
   if(sh.mode==='proj'){const g=v('f-memo');if(g!==undefined)sh.goal=g}
   if(sh.mode==='mile'){const d=v('f-mdue');if(d!==undefined)sh.due=d}
-  if(sh.mode==='plog'){const p=v('f-lpid');if(p!==undefined)sh.pid=p;const d=v('f-ldate');if(d!==undefined)sh.date=d;LOGF.forEach(([k])=>{const x=v('f-l'+k);if(x!==undefined)sh[k]=x})}
+  if(sh.mode==='plog'){const p=v('f-lpid');if(p!==undefined)sh.pid=p;const d=v('f-ldate');if(d!==undefined)sh.date=d;const x=v('f-ltext');if(x!==undefined)sh.text=x}
   if(sh.mode==='jot'){const jv=v('f-jtext');if(jv!==undefined)sh.t=jv}
   if(sh.mode==='ev'||sh.mode==='mev'){const dv=v('f-evdate');if(dv!==undefined)sh.date=dv;const de=v('f-evend');if(de!==undefined)sh.end=de||''}
   if(sh.mode==='task'){const dv=v('f-date');if(dv!==undefined)sh.date=dv||null;const gv=v('f-goal');if(gv!==undefined)sh.goal=gv||null}
@@ -1167,7 +1165,12 @@ function drawEv(){const b=document.getElementById('evbox');if(b&&view==='today')
 function openEv(e){sh=e?{mode:'ev',...JSON.parse(JSON.stringify(e))}:{mode:'ev',id:null,t:'',date:sel,memo:''};renderSheet()}
 /* ---------- research: themes, milestones and progress log ---------- */
 const PSTAT={active:'進行中',hold:'保留',done:'完了'},MSTAT={todo:'未着手',doing:'進行中',done:'完了'},MNEXT={todo:'doing',doing:'done',done:'todo'};
+// Older versions split a log into four fields; they are merged into one free text, keeping the field names.
 const LOGF=[['did','やったこと'],['res','結果・わかったこと'],['next','次にやること'],['issue','困っていること']];
+function logText(l){if(typeof l.text==='string'&&l.text.trim())return l.text;
+  const parts=LOGF.filter(([k])=>String(l[k]||'').trim());
+  if(parts.length===1&&parts[0][0]==='did')return String(l.did).trim();
+  return parts.map(([k,n])=>`${n}：${String(l[k]).trim()}`).join('\n')}
 const logOpen=new Set();
 const projOf=id=>S.projects.find(p=>p.id===id);
 function mileRow(m){const t=todayKey(),n=m.due?dayDiff(t,m.due):null;
@@ -1175,7 +1178,7 @@ function mileRow(m){const t=todayKey(),n=m.due?dayDiff(t,m.due):null;
   return `<li class="${m.status==='done'?'done':''}"><button class="mstat ${m.status}" data-act="mstat" data-id="${m.id}" aria-label="状態を切り替える（今：${MSTAT[m.status]}）">${MSTAT[m.status]}</button>
     <button class="tbody" data-act="medit" data-id="${m.id}"><span class="ttext">${esc(m.t)}</span>${m.cd&&m.status!=='done'?'<span class="meta">今日の画面でカウントダウン中</span>':''}${m.memo?`<span class="tmemo">${esc(m.memo)}</span>`:''}</button>
     ${due?`<span class="mdue ${m.status!=='done'&&n!=null&&n<=7?'soon':''}">${due}</span>`:''}</li>`}
-function logItem(l){return `<button class="plog" data-act="ledit" data-id="${l.id}"><span class="pld">${md(l.date)}（${wdOf(l.date)}）</span><dl>${LOGF.filter(([k])=>l[k]).map(([k,n])=>`<dt>${n}</dt><dd>${esc(l[k])}</dd>`).join('')}</dl></button>`}
+function logItem(l){return `<button class="plog" data-act="ledit" data-id="${l.id}"><span class="pld">${md(l.date)}（${wdOf(l.date)}）</span><span class="pltx">${esc(l.text)}</span></button>`}
 function projCard(p){
   const ms=S.miles.filter(m=>m.pid===p.id).sort((a,b)=>(a.status==='done')-(b.status==='done')||(a.due||'9999').localeCompare(b.due||'9999'));
   const dn=ms.filter(m=>m.status==='done').length,pct=ms.length?Math.round(dn/ms.length*100):0;
@@ -1201,7 +1204,7 @@ function renderResearch(){
 }
 function openProj(p){const used=new Set(S.projects.map(x=>x.c));sh=p?{mode:'proj',...JSON.parse(JSON.stringify(p))}:{mode:'proj',id:null,t:'',goal:'',status:'active',c:[0,1,2,3,5,6,7,4].find(i=>!used.has(i))??0};renderSheet()}
 function openMile(m,pid){sh=m?{mode:'mile',...JSON.parse(JSON.stringify(m))}:{mode:'mile',id:null,pid,t:'',due:'',status:'todo',cd:false,memo:''};renderSheet()}
-function openLog(l,pid){sh=l?{mode:'plog',...JSON.parse(JSON.stringify(l))}:{mode:'plog',id:null,pid:pid||(S.projects.find(p=>p.status==='active')||S.projects[0]||{}).id,date:todayKey(),did:'',res:'',next:'',issue:''};renderSheet()}
+function openLog(l,pid){sh=l?{mode:'plog',...JSON.parse(JSON.stringify(l))}:{mode:'plog',id:null,pid:pid||(S.projects.find(p=>p.status==='active')||S.projects[0]||{}).id,date:todayKey(),text:''};renderSheet()}
 const blockDur=()=>sh&&sh.s!=null&&sh.e!=null?'長さ '+fmtDur(((sh.e-sh.s+1440)%1440)||1440):'';
 /* ---------- Google Calendar event editor ---------- */
 function openGev(d,i){const e=calFor(d)[+i];if(!e)return;
@@ -1316,7 +1319,7 @@ function renderSheet(){
     body=`<h3>${editing?'進捗ログを編集':'進捗を記録'}</h3>
     <div class="timerow"><div class="field"><label for="f-lpid">テーマ</label><select id="f-lpid">${S.projects.map(p=>`<option value="${p.id}" ${p.id===sh.pid?'selected':''}>${esc(p.t)}</option>`).join('')}</select></div>
       <div class="field"><label for="f-ldate">日付</label><input type="date" id="f-ldate" value="${esc(sh.date||'')}"></div></div>
-    ${LOGF.map(([k,n])=>`<div class="field"><label for="f-l${k}">${n}</label><textarea id="f-l${k}" style="min-height:${k==='did'||k==='res'?72:56}px">${esc(sh[k]||'')}</textarea></div>`).join('')}`;
+    <div class="field"><label for="f-ltext">内容</label><textarea id="f-ltext" style="min-height:200px;line-height:1.6" placeholder="例：MALDI-MSIで雄雌の腎切片を測定。PI 38:4 が雄の皮質で高い傾向。次回はn数を増やして再測定する">${esc(sh.text||'')}</textarea></div>`;
   }else if(sh.mode==='ev'||sh.mode==='mev'){const isM=sh.mode==='mev';
     body=`<h3>${isM?(editing?'イベントを編集':'イベントを追加'):(editing?'予定を編集':'予定を追加')}</h3>
     <div class="field"><label for="f-text">内容</label><input type="text" id="f-text" value="${esc(sh.t)}" placeholder="例：学会（大阪）" enterkeyhint="done"></div>
@@ -1365,9 +1368,9 @@ function saveSheet(){if(sh&&sh.mode==='gev'){if(!sh.ro&&!sh.busy)gevSave();retur
   if(sh.mode==='mile'){if(!text){sheetErr('内容を入力してください。');return}
     const o={id:sh.id||uid(),pid:sh.pid,t:text,due:isDayK(sh.due)?sh.due:'',status:sh.status,cd:!!sh.cd,memo:(sh.memo||'').trim()},i=S.miles.findIndex(x=>x.id===o.id);i>=0?S.miles[i]=o:S.miles.push(o);
     sh=null;renderSheet();persist();return}
-  if(sh.mode==='plog'){const o={id:sh.id||uid(),pid:sh.pid,date:sh.date};LOGF.forEach(([k])=>{o[k]=(sh[k]||'').trim()});
+  if(sh.mode==='plog'){const o={id:sh.id||uid(),pid:sh.pid,date:sh.date,text:(sh.text||'').trim()};
     if(!projOf(o.pid)){sheetErr('テーマを選んでください。');return}if(!isDayK(o.date)){sheetErr('日付を入力してください。');return}
-    if(!LOGF.some(([k])=>o[k])){sheetErr('どれか1つの欄に書いてください。');return}
+    if(!o.text){sheetErr('内容を書いてください。');return}
     const i=S.plogs.findIndex(x=>x.id===o.id);i>=0?S.plogs[i]=o:S.plogs.push(o);logOpen.add(o.pid);
     sh=null;renderSheet();persist();return}
   if(sh.mode==='ev'||sh.mode==='mev'){if(!text){sheetErr('内容を入力してください。');return}if(!isDayK(sh.date)){sheetErr('日付を入力してください。');return}
