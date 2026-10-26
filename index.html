@@ -236,6 +236,18 @@ details.pdone .plist{margin-top:12px}
 .wev .tt{overflow-wrap:anywhere}
 .wev:focus-visible,.wadc:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .wnow{position:absolute;left:0;right:0;border-top:2px solid var(--danger);pointer-events:none}
+.wev.mv{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.wdraft{z-index:3;overflow:visible;touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;border:2px solid var(--ec,var(--accent));box-shadow:0 4px 14px rgba(0,0,0,.18);background:color-mix(in srgb,var(--ec,var(--accent)) 30%,var(--surface))}
+.wdraft.new{border-style:dashed}
+.wdraft:active{cursor:grabbing}
+.wdh{position:absolute;left:0;right:0;height:16px;cursor:ns-resize;touch-action:none;z-index:1}
+.wdh.top{top:-8px}.wdh.bot{bottom:-8px}
+.wdraft .tt,.wdraft .tm{overflow:hidden;max-width:100%}
+.wdh::after{content:"";position:absolute;left:50%;top:50%;width:18px;height:5px;margin:-2.5px 0 0 -9px;border-radius:3px;background:var(--ec,var(--accent))}
+.wdbar{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--surface);border:1px solid var(--accent);border-radius:var(--r);padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.wdinfo{flex:1 1 180px;display:flex;flex-direction:column;gap:2px;min-width:0;font-size:14px}
+.wdinfo small{color:var(--muted)}
+.wdbtns{display:flex;gap:8px;margin-left:auto}
 .calchk{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;cursor:pointer}
 .calchk input{width:18px;height:18px;accent-color:var(--accent);flex:none}
 .calchk .dot{margin-top:0}
@@ -352,6 +364,7 @@ ul.list.rlist>li:focus-within{outline:2px solid var(--accent);outline-offset:-2p
   .c-today2{grid-template-columns:repeat(2,minmax(0,1fr))}
   .c-week{grid-template-columns:minmax(0,1fr) 340px}
   .c-week .col>*{order:0}
+  .wdbar{bottom:16px}
   .c-month,.c-set{grid-template-columns:repeat(2,minmax(0,1fr))}
   .plist{grid-template-columns:repeat(auto-fill,minmax(400px,1fr));align-items:start}
   .days{gap:0;border-bottom:1px solid var(--line)}
@@ -412,7 +425,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const RESI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='26';
+const APP_VERSION='27';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -505,7 +518,7 @@ async function sync(){
   syncing=true;setStatus(dirty?'保存中…':'確認中…');
   try{
     if(dirty){const sent=JSON.stringify(S);const j=await call(conn,'save',{base,state:S});base=j.version;if(JSON.stringify(S)===sent)dirty=false}
-    else{const j=await call(conn,'load',{});if(j.version!==base){S=norm(j.state);base=j.version;if(!typing()&&!drag)render()}}
+    else{const j=await call(conn,'load',{});if(j.version!==base){S=norm(j.state);base=j.version;if(!typing()&&!drag&&!wdg)render()}}
     saveLocal();lastSync=hhmmNow();idleStatus();
   }catch(e){
     if(e&&e.error==='conflict'){conflict={state:e.state,version:e.version};render();idleStatus()}
@@ -566,7 +579,7 @@ async function fetchCal(wk,nw=1){const wks=Array.from({length:nw},(_,i)=>addDays
     try{localStorage.setItem(CALK,JSON.stringify({cal,calAt}))}catch(e){}
   }catch(e){calErr=e&&e.error==='bad_action'?'old':'err';const now=Date.now();wks.forEach(w=>{calAt[w]=now})}
   finally{wks.forEach(w=>{delete calBusy[w]});drawEv();
-    if(view==='week'&&wks.includes(wkSel))render();
+    if(view==='week'&&wks.includes(wkSel)&&!wdg)render();
     if(view==='month'&&wks.includes(calRange()[0]))render()}}
 async function fetchCalList(){if(!conn||calListBusy)return;calListBusy=true;
   try{const j=await call(conn,'calendars',{});calList=(j.calendars||[]).map(c=>({id:String(c.id),name:String(c.name||c.id),color:safeColor(c.color),own:!!c.own,shown:c.shown!==false,primary:!!c.primary}));calListErr=null;
@@ -798,10 +811,25 @@ function growAll(){document.querySelectorAll('.rectx').forEach(grow)}
 const WK_PX=40; // height of one hour
 let wkPage=null,wkDaySel=null;
 const isNarrow=()=>{try{return matchMedia('(max-width: 899.98px)').matches}catch(e){return false}};
+/* A draft block on the week grid: a new event being placed, or an existing event being moved/resized.
+   wkDraft = {mode:'new'|'move', d, a, b, (move:) id, cal, t, desc, orig:{d,a,b}, busy, err} */
+let wkDraft=null,wdg=null,wkSuppress=0;
+const movable=x=>!!x&&x.edit&&!x.allDay&&!x.rec&&(!x.sd||!x.ed||x.sd===x.ed)&&toMinS(x.s)!=null;
+const wdEnd=b=>b>=1440?'24:00':hm(b);
+function draftBlock(h0){const x=wkDraft,y=m=>(m-h0*60)*WK_PX/60,top=y(x.a),ht=Math.max(14,y(x.b)-top-2);
+  return `<div class="wev wdraft${x.mode==='new'?' new':''}" id="wdraft" data-wd="body" style="--ec:${x.color||'var(--accent)'};top:${top+1}px;height:${ht}px;left:1px;width:calc(100% - 3px)">
+    <span class="wdh top" data-wd="top" aria-hidden="true"></span><span class="tm" id="wdtm">${hm(x.a)}–${wdEnd(x.b)}</span><span class="tt">${esc(x.mode==='new'?'新しい予定':x.t)}</span><span class="wdh bot" data-wd="bot" aria-hidden="true"></span></div>`}
+function draftBar(){const x=wkDraft;if(!x)return '';
+  const lbl=`${md(x.d)}（${wdOf(x.d)}） <span class="mono">${hm(x.a)}–${wdEnd(x.b)}</span> <small>${fmtDur(x.b-x.a)}</small>`;
+  return `<div class="wdbar" id="wdbar"><div class="wdinfo"><span id="wdlbl">${lbl}</span><span class="note">${x.mode==='new'?'枠をドラッグで移動、上下の端で長さを変えられます':esc(x.t)}</span>${x.err?`<span class="note warnline">${esc(x.err)}</span>`:''}</div>
+    <div class="wdbtns">${x.mode==='new'?`<button class="btn ghost" data-act="wd-cancel">やめる</button><button class="btn" data-act="wd-add">この時間で追加</button>`
+      :`<button class="btn ghost" data-act="wd-cancel" ${x.busy?'disabled':''}>元に戻す</button><button class="btn" data-act="wd-save" ${x.busy?'disabled':''}>${x.busy?'保存中…':'保存'}</button>`}</div></div>`}
 function weekGrid(vis,narrow,start){
-  const t=todayKey(),nm=nowMin(),cols=vis.map(d=>layoutCols(timedOf(d)));
+  const t=todayKey(),nm=nowMin(),hide=wkDraft&&wkDraft.mode==='move'?wkDraft.id:null;
+  const cols=vis.map(d=>layoutCols(timedOf(d).filter(e=>!hide||e.id!==hide)));
   const all=cols.flat();let h0=8,h1=20;
   if(all.length){h0=Math.min(h0,Math.floor(Math.min(...all.map(e=>e.a))/60));h1=Math.max(h1,Math.ceil(Math.max(...all.map(e=>e.b))/60))}
+  if(wkDraft&&vis.includes(wkDraft.d)){h0=Math.min(h0,Math.floor(wkDraft.a/60)-1);h1=Math.max(h1,Math.ceil(wkDraft.b/60)+1)}
   h0=Math.max(0,h0);h1=Math.min(24,h1);
   const H=(h1-h0)*WK_PX,y=m=>(m-h0*60)*WK_PX/60;
   const ad=vis.map(d=>calFor(d).map((e,i)=>({...e,_i:i})).filter(e=>e.allDay)),anyAd=ad.some(x=>x.length);
@@ -810,17 +838,84 @@ function weekGrid(vis,narrow,start){
   g+=vis.map((d,i)=>`<button class="wday${d===t?' today':''}${d===wkDaySel?' sel':''}" data-act="wkday" data-d="${d}" aria-pressed="${d===wkDaySel}" aria-label="${md(d)}（${wdOf(d)}）のタスクを表示"><b>${wdOf(d)}</b><span>${parse(d).getDate()}</span>${dl[i]?`<em class="wn">締切${dl[i]>1?dl[i]:''}</em>`:''}</button>`).join('');
   if(anyAd){g+=`<div class="wadl">終日</div>`+ad.map((x,i)=>`<div class="wad">${x.map(e=>`<button class="wadc" data-act="gevopen" data-d="${vis[i]}" data-i="${e._i}" style="--ec:${e.color||'var(--accent)'}" title="${esc(e.t)}">${esc(e.t)}</button>`).join('')}</div>`).join('')}
   g+=`<div class="wtimes" style="height:${H}px">`;for(let k=h0;k<h1;k++)g+=`<span style="top:${y(k*60)+2}px">${k}:00</span>`;g+=`</div>`;
-  vis.forEach((d,i)=>{let c=`<div class="wcol${d===t?' today':''}" data-act="wslot" data-d="${d}" data-h0="${h0}" style="height:${H}px" aria-label="${md(d)}の空いている時間をタップすると予定を追加">`;
+  vis.forEach((d,i)=>{let c=`<div class="wcol${d===t?' today':''}" data-act="wslot" data-d="${d}" data-h0="${h0}" data-h1="${h1}" style="height:${H}px" aria-label="${md(d)}の空いている時間をタップすると予定の枠が出ます">`;
     for(let k=h0;k<h1;k++){c+=`<div class="hl" style="top:${y(k*60)}px"></div><div class="hl half" style="top:${y(k*60+30)}px"></div>`}
-    cols[i].forEach(e=>{const top=y(e.a),ht=Math.max(18,y(e.b)-top-2);
-      c+=`<button class="wev" data-act="gevopen" data-d="${d}" data-i="${e._i}" style="--ec:${e.color||'var(--accent)'};top:${top+1}px;height:${ht}px;left:calc(100% * ${e.col}/${e.n} + 1px);width:calc(100% / ${e.n} - 3px)" title="${esc(e.s)}${e.e?'–'+esc(e.e):''} ${esc(e.t)}">${ht>=30?`<span class="tm">${esc(e.s)}</span>`:''}<span class="tt">${esc(e.t)}</span></button>`});
+    cols[i].forEach(e=>{const top=y(e.a),ht=Math.max(18,y(e.b)-top-2),mv=movable(e);
+      c+=`<button class="wev${mv?' mv':''}" data-act="gevopen" data-d="${d}" data-i="${e._i}" style="--ec:${e.color||'var(--accent)'};top:${top+1}px;height:${ht}px;left:calc(100% * ${e.col}/${e.n} + 1px);width:calc(100% / ${e.n} - 3px)" title="${esc(e.s)}${e.e?'–'+esc(e.e):''} ${esc(e.t)}${mv?'（長押し・ドラッグで移動）':''}">${ht>=30?`<span class="tm">${esc(e.s)}</span>`:''}<span class="tt">${esc(e.t)}</span></button>`});
+    if(wkDraft&&wkDraft.d===d)c+=draftBlock(h0);
     if(d===t&&nm>=h0*60&&nm<=h1*60)c+=`<div class="wnow" style="top:${y(nm)}px" aria-hidden="true"></div>`;
     g+=c+`</div>`});
   g+=`</div>`;
   const nav=narrow?`<button class="side-btn" data-act="wkpage" data-n="-1" ${start===0?'disabled':''} aria-label="前の3日">‹</button><span class="mono" style="color:var(--muted)">${md(vis[0])}–${md(vis[vis.length-1])}</span><button class="side-btn" data-act="wkpage" data-n="1" ${start>=4?'disabled':''} aria-label="次の3日">›</button>`:'';
   return `<section class="wtl"><div class="wtlhd">${nav}<span class="sp"></span>${calOK()?`<button class="linkbtn" data-act="gevnew" data-d="${wkDaySel}">＋ 予定を追加</button>`:''}</div>${g}
-    ${conn?calNote():'<p class="note" style="margin:0">設定でスプレッドシートとつなぐと、Googleカレンダーの予定がここに表示されます。</p>'}</section>`;
+    ${draftBar()}
+    ${conn?calNote():'<p class="note" style="margin:0">設定でスプレッドシートとつなぐと、Googleカレンダーの予定がここに表示されます。</p>'}
+    ${calOK()&&!wkDraft?'<p class="note" style="margin:0">空いている時間を押すと予定の枠が出ます。入っている予定は長押し（PCはドラッグ）で動かせます。</p>':''}</section>`;
 }
+/* ---------- dragging on the week grid ---------- */
+const wcolOf=d=>document.querySelector(`.wcol[data-d="${d}"]`);
+function wcolAt(x){return [...document.querySelectorAll('.wcol')].find(c=>{const r=c.getBoundingClientRect();return x>=r.left&&x<r.right})||null}
+function minAt(col,y){const r=col.getBoundingClientRect();return (+col.dataset.h0||0)*60+(y-r.top)/WK_PX*60}
+const snap15=m=>Math.round(m/15)*15;
+function placeDraft(){const el=document.getElementById('wdraft'),col=wkDraft&&wcolOf(wkDraft.d);if(!el||!col)return;
+  if(el.parentNode!==col)col.appendChild(el);
+  const h0=+col.dataset.h0||0,y=m=>(m-h0*60)*WK_PX/60,top=y(wkDraft.a);
+  el.style.top=(top+1)+'px';el.style.height=Math.max(14,y(wkDraft.b)-top-2)+'px';
+  const tm=document.getElementById('wdtm');if(tm)tm.textContent=`${hm(wkDraft.a)}–${wdEnd(wkDraft.b)}`;
+  const lb=document.getElementById('wdlbl');if(lb)lb.innerHTML=`${md(wkDraft.d)}（${wdOf(wkDraft.d)}） <span class="mono">${hm(wkDraft.a)}–${wdEnd(wkDraft.b)}</span> <small>${fmtDur(wkDraft.b-wkDraft.a)}</small>`}
+// Turn an existing event into the draft in place (keeps the touch going on the same element).
+function startMove(g){const x=calFor(g.d)[g.i];if(!movable(x)){wdg=null;return}
+  const a=toMinS(x.s);let b=x.e?toMinS(x.e):1440;if(b==null||b<=a)b=Math.min(1440,a+30);
+  wkDraft={mode:'move',d:g.d,a,b,id:x.id,cal:x.cal,t:x.t,desc:x.desc,color:x.color,orig:{d:g.d,a,b}};
+  const el=g.el;el.id='wdraft';el.classList.add('wdraft');el.removeAttribute('data-act');el.dataset.wd='body';el.style.left='1px';el.style.width='calc(100% - 3px)';
+  el.innerHTML=`<span class="wdh top" data-wd="top" aria-hidden="true"></span><span class="tm" id="wdtm"></span><span class="tt">${esc(x.t)}</span><span class="wdh bot" data-wd="bot" aria-hidden="true"></span>`;
+  const col=wcolOf(g.d);wdg={kind:'body',id:g.id,x0:g.x0,y0:g.y0,off:col?minAt(col,g.y0)-a:0,moved:false};placeDraft();
+  try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}}
+document.addEventListener('pointerdown',e=>{
+  if(view!=='week'||!loaded||sh||!calOK()||e.button>0)return;const t=e.target;if(!t.closest)return;
+  const h=t.closest('#wdraft [data-wd], #wdraft');
+  if(h&&wkDraft&&!wkDraft.busy){const col=wcolOf(wkDraft.d);if(!col)return;const kind=h.dataset.wd||'body';
+    wdg={kind,id:e.pointerId,x0:e.clientX,y0:e.clientY,off:minAt(col,e.clientY)-wkDraft.a,moved:false};e.preventDefault();return}
+  if(wkDraft&&wkDraft.busy)return;
+  const ev=t.closest('.wgrid .wev.mv');
+  if(ev){const g={kind:'pend-ev',d:ev.dataset.d,i:+ev.dataset.i,id:e.pointerId,x0:e.clientX,y0:e.clientY,touch:e.pointerType!=='mouse',el:ev};
+    if(wkDraft&&wkDraft.mode==='move')return; // finish or undo the current move first
+    if(wkDraft){wkDraft=null;const old=document.getElementById('wdraft');if(old)old.remove();const bar=document.getElementById('wdbar');if(bar)bar.remove()}
+    wdg=g;if(g.touch)g.timer=setTimeout(()=>{if(wdg===g){wkSuppress=Date.now();startMove(g)}},450);return}
+  const col=t.closest('.wcol');
+  if(col&&e.pointerType==='mouse'&&(t===col||t.classList.contains('hl'))&&!(wkDraft&&wkDraft.mode==='move'))
+    wdg={kind:'pend-new',d:col.dataset.d,id:e.pointerId,x0:e.clientX,y0:e.clientY,m0:minAt(col,e.clientY)};
+});
+document.addEventListener('pointermove',e=>{
+  if(!wdg||e.pointerId!==wdg.id)return;const dist=Math.hypot(e.clientX-wdg.x0,e.clientY-wdg.y0);
+  if(wdg.kind==='pend-ev'){if(wdg.touch){if(dist>8){clearTimeout(wdg.timer);wdg=null}return}if(dist<5)return;wkSuppress=Date.now();startMove(wdg);if(!wdg)return}
+  if(wdg.kind==='pend-new'){if(dist<5)return;const m=snap15(wdg.m0);wkDraft={mode:'new',d:wdg.d,a:m,b:m+15};wdg={...wdg,kind:'create'};wkSuppress=Date.now();render()}
+  const col0=wcolOf(wkDraft.d);if(!col0){wdg=null;return}
+  const h0=(+col0.dataset.h0||0)*60,h1=(+col0.dataset.h1||24)*60;
+  if(wdg.kind==='create'){const m=minAt(col0,e.clientY),lo=snap15(Math.min(m,wdg.m0)),hi=snap15(Math.max(m,wdg.m0));
+    wkDraft.a=clamp(lo,h0,h1-15);wkDraft.b=clamp(Math.max(hi,wkDraft.a+15),wkDraft.a+15,h1)}
+  else if(wdg.kind==='body'){const col=wcolAt(e.clientX)||col0,dur=wkDraft.b-wkDraft.a,m=minAt(col,e.clientY);
+    wkDraft.d=col.dataset.d;wkDraft.a=clamp(snap15(m-wdg.off),h0,h1-dur);wkDraft.b=wkDraft.a+dur}
+  else if(wdg.kind==='top'){wkDraft.a=clamp(snap15(minAt(col0,e.clientY)),h0,wkDraft.b-15)}
+  else if(wdg.kind==='bot'){wkDraft.b=clamp(snap15(minAt(col0,e.clientY)),wkDraft.a+15,h1)}
+  wdg.moved=true;wkDraft.err='';placeDraft();e.preventDefault();
+});
+function endWdrag(e){if(!wdg||e.pointerId!==wdg.id)return;const g=wdg;wdg=null;clearTimeout(g.timer);
+  if(g.kind==='pend-ev'||g.kind==='pend-new')return;
+  wkSuppress=Date.now();render()}
+document.addEventListener('pointerup',endWdrag);document.addEventListener('pointercancel',endWdrag);
+// While a block is being dragged by touch, keep the page from scrolling.
+document.addEventListener('touchmove',e=>{if(wdg&&wdg.kind!=='pend-ev'&&wdg.kind!=='pend-new')e.preventDefault()},{passive:false});
+async function wdSave(){const x=wkDraft;if(!x||x.mode!=='move'||x.busy)return;
+  if(x.d===x.orig.d&&x.a===x.orig.a&&x.b===x.orig.b){wkDraft=null;render();return}
+  x.busy=true;x.err='';render();
+  const r=await calWrite('updateEvent',{id:x.id,cal:x.cal,t:x.t,allDay:false,sd:x.d,ed:x.d,st:hm(x.a),et:x.b>=1440?'23:59':hm(x.b),desc:x.desc||'',timeOnly:true});
+  if(wkDraft!==x)return;
+  if(r.err){x.busy=false;x.err=r.err;render();return}
+  // show the new time right away; the next load from Google Calendar confirms it
+  const from=cal[x.orig.d];if(Array.isArray(from)){const k=from.findIndex(e=>e.id===x.id);if(k>=0){const ev=from.splice(k,1)[0];
+    Object.assign(ev,{s:hm(x.a),e:x.b>=1440?'':hm(x.b),st:hm(x.a),et:x.b>=1440?'23:59':hm(x.b),sd:x.d,ed:x.d});(cal[x.d]||(cal[x.d]=[])).push(ev)}}
+  wkDraft=null;render();calChanged([x.orig.d,x.d])}
 function renderWeek(){
   const days=weekDays(wkSel);const t=todayKey();
   setHead(`第${isoWeek(wkSel)}週${days.includes(t)?' · 今週':''}`,`${md(days[0])}（月）– ${md(days[6])}（日）`,
@@ -967,7 +1062,7 @@ function render(){
   const t=todayKey();const d=parse(t);
   document.getElementById('tabs').innerHTML=[['today','今日',d.getDate()],['week','週','W'+isoWeek(t)],['month','月',(d.getMonth()+1)+'月'],['research','研究',RESI],['settings','設定',GEAR]]
     .map(([k,n,b])=>`<button data-act="tab" data-v="${k}" ${view===k?'aria-current="page"':''}>${k==='settings'||k==='research'?b:`<b>${b}</b>`}${n}</button>`).join('');
-  document.getElementById('fab').hidden=!!sh||view==='settings';
+  document.getElementById('fab').hidden=!!sh||view==='settings'||(view==='week'&&!!wkDraft);
 }
 document.addEventListener('change',e=>{
   if(e.target.matches&&e.target.matches('input[data-calid]')){const ids=[...document.querySelectorAll('input[data-calid]')].filter(x=>x.checked).map(x=>x.dataset.calid);
@@ -1113,7 +1208,7 @@ function openGev(d,i){const e=calFor(d)[+i];if(!e)return;
   sh={mode:'gev',id:e.id,cal:e.cal,t:e.t,allDay:e.allDay,sd:e.sd||d,ed:e.ed||e.sd||d,st:e.st||e.s||'09:00',et:e.et||e.e||'10:00',desc:e.desc||'',orig:e.sd||d,
     ro:!e.edit||(!e.allDay&&e.ed&&e.sd&&e.ed!==e.sd),rec:e.rec,color:e.color,show:{s:e.s,e:e.e}};
   if(!calList&&!calListBusy)fetchCalList();renderSheet()}
-function openGevNew(d,startMin){const s=startMin==null?540:Math.max(0,Math.min(1410,startMin)),e=Math.min(1439,s+60);
+function openGevNew(d,startMin,endMin){const s=startMin==null?540:Math.max(0,Math.min(1410,startMin)),e=endMin!=null&&endMin>s?Math.min(1439,endMin):Math.min(1439,s+60);
   sh={mode:'gev',id:null,cal:defCal(),t:'',allDay:false,sd:d,ed:d,st:hm(s),et:e>=1439?'23:59':hm(e),desc:''};
   if(!calList&&!calListBusy)fetchCalList();renderSheet()}
 function gevBody(){
@@ -1156,7 +1251,7 @@ async function gevSave(){gevRead();const t=(sh.t||'').trim();sh.err='';
   const r=await calWrite(sh.id?'updateEvent':'createEvent',ev);
   if(sh!==cur)return;
   if(r.err){sh.busy=false;sh.err=r.err;renderSheet();return}
-  const days=[ev.sd,cur.orig];sh=null;renderSheet();calChanged(days)}
+  const days=[ev.sd,cur.orig];if(!cur.id&&wkDraft&&wkDraft.mode==='new')wkDraft=null;sh=null;renderSheet();calChanged(days)}
 async function gevDel(){if(!sh.armed){gevRead();sh.armed=true;sh.err='';renderSheet();return}
   sh.busy=true;renderSheet();const cur=sh;
   const r=await calWrite('deleteEvent',{id:sh.id,cal:sh.cal});
@@ -1351,7 +1446,10 @@ function clearSample(){const ex=x=>String(x.t).startsWith('例：');const gids=n
 
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
-  const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act,id=el.dataset.id,n=Number(el.dataset.n);
+  const el=e.target.closest('[data-act]');if(!el)return;
+  // ignore the click that ends a drag or long-press on the week grid
+  if(Date.now()-wkSuppress<450&&el.closest('.wgrid'))return;
+ const a=el.dataset.act,id=el.dataset.id,n=Number(el.dataset.n);
   if(a==='sh-bg'){if(e.target===el){sh=null;renderSheet()}return}
   if(!loaded&&!a.startsWith('sh-'))return;
   switch(a){
@@ -1423,9 +1521,9 @@ document.addEventListener('click',e=>{
     case 'catmove':{const cs=cats().map(c=>({...c})),i=cs.findIndex(c=>c.k===el.dataset.k),j=i+n;if(i<0||j<0||j>=cs.length)break;[cs[i],cs[j]]=[cs[j],cs[i]];S.cats=cs;persist();break}
     case 'sh-ccol':readSheet();sh.c=Number(el.dataset.v);sh.armed=false;renderSheet();break;
     case 'sh-col':readSheet();sh.c=el.dataset.v;renderSheet();break;
-    case 'tab':view=el.dataset.v;tplEdit=null;confirmCarry=confirmClear=confirmCopy=false;rsel=null;if(view==='week')wkSel=monday(sel);if(view==='month'){moSel=sel.slice(0,7);mDay=null}render();window.scrollTo(0,0);break;
+    case 'tab':view=el.dataset.v;tplEdit=null;wkDraft=null;confirmCarry=confirmClear=confirmCopy=false;rsel=null;if(view==='week')wkSel=monday(sel);if(view==='month'){moSel=sel.slice(0,7);mDay=null}render();window.scrollTo(0,0);break;
     case 'day':sel=n===0?todayKey():addDays(sel,n);rsel=null;confirmCopy=false;render();break;
-    case 'wk':wkPage=null;wkDaySel=null;wkSel=n===0?monday(todayKey()):addDays(wkSel,7*n);sel=wkSel<=todayKey()&&todayKey()<=addDays(wkSel,6)?todayKey():wkSel;confirmCarry=false;render();break;
+    case 'wk':wkPage=null;wkDaySel=null;wkDraft=null;wkSel=n===0?monday(todayKey()):addDays(wkSel,7*n);sel=wkSel<=todayKey()&&todayKey()<=addDays(wkSel,6)?todayKey():wkSel;confirmCarry=false;render();break;
     case 'mo':moSel=n===0?todayKey().slice(0,7):moAdd(moSel,n);mDay=null;render();break;
     case 'toggle':{const t=S.tasks.find(x=>x.id===id);if(t){t.done=!t.done;persist()}break}
     case 'gtoggle':{const g=S.goals.find(x=>x.id===id);if(g){g.done=!g.done;persist()}break}
@@ -1452,8 +1550,12 @@ document.addEventListener('click',e=>{
     case 'tlslot':{if(!calOK())break;const r=el.getBoundingClientRect();openGevNew(sel,Math.floor((e.clientY-r.top)/TL_PX*2)*30);break}
     case 'mday':mDay=el.dataset.d;render();break;
     case 'mopen':sel=el.dataset.d;view='today';rsel=null;confirmCopy=false;render();window.scrollTo(0,0);break;
-    case 'wslot':{if(!calOK()||e.target!==el&&!e.target.classList.contains('hl'))break;const r=el.getBoundingClientRect(),h0=+el.dataset.h0||0;
-      const m=Math.floor((h0*60+(e.clientY-r.top)/WK_PX*60)/30)*30;openGevNew(el.dataset.d,m);break}
+    case 'wslot':{if(!calOK()||e.target!==el&&!e.target.classList.contains('hl'))break;if(wkDraft&&(wkDraft.mode==='move'||wkDraft.busy))break;
+      const r=el.getBoundingClientRect(),h0=+el.dataset.h0||0,h1=(+el.dataset.h1||24)*60;
+      const m=Math.min(h1-60,Math.floor((h0*60+(e.clientY-r.top)/WK_PX*60)/30)*30);wkDraft={mode:'new',d:el.dataset.d,a:Math.max(0,m),b:Math.max(0,m)+60};render();break}
+    case 'wd-cancel':if(wkDraft&&!wkDraft.busy){wkDraft=null;render()}break;
+    case 'wd-add':if(wkDraft&&wkDraft.mode==='new'&&calOK())openGevNew(wkDraft.d,wkDraft.a,wkDraft.b);break;
+    case 'wd-save':wdSave();break;
     case 'wkday':wkDaySel=el.dataset.d;render();break;
     case 'wkpage':wkPage=n<0?Math.max(0,(wkPage||0)-3):Math.min(4,(wkPage||0)+3);render();break;
     case 'callist-refresh':calList=null;calListErr=null;fetchCalList();render();break;
@@ -1510,7 +1612,7 @@ function endDrag(e){
   drawDial();
 }
 document.addEventListener('pointerup',endDrag);document.addEventListener('pointercancel',endDrag);
-setInterval(()=>{if(view==='today'&&loaded&&!drag){drawDial();drawTl()}if(view==='week'&&loaded&&!sh)render()},60000);
+setInterval(()=>{if(view==='today'&&loaded&&!drag){drawDial();drawTl()}if(view==='week'&&loaded&&!sh&&!wdg&&!(wkDraft&&wkDraft.busy))render()},60000);
 try{matchMedia('(max-width: 899.98px)').addEventListener('change',()=>{if(view==='week'){wkPage=null;render()}})}catch(e){}
 
 boot();
