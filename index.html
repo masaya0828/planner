@@ -351,6 +351,7 @@ ul.list.rlist>li:focus-within{outline:2px solid var(--accent);outline-offset:-2p
   .c-today{grid-template-columns:minmax(0,1fr) minmax(340px,440px)}
   .c-today2{grid-template-columns:repeat(2,minmax(0,1fr))}
   .c-week{grid-template-columns:minmax(0,1fr) 340px}
+  .c-week .col>*{order:0}
   .c-month,.c-set{grid-template-columns:repeat(2,minmax(0,1fr))}
   .plist{grid-template-columns:repeat(auto-fill,minmax(400px,1fr));align-items:start}
   .days{gap:0;border-bottom:1px solid var(--line)}
@@ -411,7 +412,7 @@ const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const moAdd=(mo,n)=>{const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)};
 const RESI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7.5 15h9"/></svg>';
 // Keep in step with CACHE in sw.js and the number in UPDATE.md.
-const APP_VERSION='25';
+const APP_VERSION='26';
 const isDayK=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -834,7 +835,8 @@ function renderWeek(){
   const un=`<section class="o3"><h2>今週中にやること（日付未定）<span class="cnt">${u.length}</span><span class="sp"></span><button class="linkbtn" data-act="addtask" data-date="">＋ 追加</button></h2>${u.length?list(u):'<div class="mini-empty">月の目標から、今週やることをここに入れておくと便利です。</div>'}</section>`;
   const sb=sampleBox();
   setTimeout(maybeCal,0);
-  return `<div class="cols c-week"><div class="col col-a">${weekGrid(vis,narrow,start)}${dsec}</div><div class="col col-b"><div class="o2">${weekDls()}</div>${un}${renderReview()}${sb?`<div class="o5">${sb}</div>`:''}</div></div>`;
+  // PC: right column = 締め切り → 今週中にやること → 選んだ日のタスク. Phone (order classes): 時間割 → 選んだ日のタスク → 締め切り → 今週中.
+  return `<div class="cols c-week"><div class="col col-a">${weekGrid(vis,narrow,start)}</div><div class="col col-b"><div class="o2">${weekDls()}</div>${un}${dsec}${renderReview()}${sb?`<div class="o5">${sb}</div>`:''}</div></div>`;
 }
 function renderReview(){
   const undone=tasksOfWeek(wkSel).filter(x=>!x.done);

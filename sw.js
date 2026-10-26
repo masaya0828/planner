@@ -2,7 +2,7 @@
 // (so updates appear as soon as you are online) and fall back to the saved copy.
 // Requests to Google (the spreadsheet sync and fonts) are never intercepted.
 // When you change any file, raise the number in CACHE so phones pick up the new version.
-const CACHE = 'planner-v25';
+const CACHE = 'planner-v26';
 const ASSETS = [
   './',
   './index.html',
